@@ -20,7 +20,7 @@
 #include <stdlib.h>
 
 
-Server server_constructor(int domain, int service, int protocol, uint32_t interface, int port, int queue) {
+Server server_constructor(int domain, int service, int protocol, uint32_t interface, int port, int queue, void (*launch)(Server *server)) {
     Server server;
     server.domain = domain;
     server.service = service;

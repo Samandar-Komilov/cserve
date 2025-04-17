@@ -17,7 +17,9 @@
 #include <netinet/in.h>
 
 
-typedef struct {
+typedef struct Server Server;
+
+typedef struct Server {
     int domain;
     int service;
     int protocol;
@@ -35,10 +37,12 @@ typedef struct {
         char           sin_zero[8];// Padding to make struct same size as sockaddr
     };
     */
+
+    void (*launch) (Server *server);
 } Server;
 
 
-Server server_constructor(int domain, int service, int protocol, uint32_t interface, int port, int queue);
+Server server_constructor(int domain, int service, int protocol, uint32_t interface, int port, int queue, void (*launch)(Server *server));
 
 
 #endif /* Server_h */
