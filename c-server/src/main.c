@@ -34,7 +34,4 @@ void launch(Server *server){
 
 int main(void){
     printf(">>>>>\n");
-    Server server = server_constructor(AF_INET, SOCK_STREAM, 0, INADDR_ANY, 8000, 10, launch);
-
-    server.launch(&server);
 }

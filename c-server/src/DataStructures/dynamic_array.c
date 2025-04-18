@@ -30,7 +30,7 @@ void insert(DynamicArray* self, int index, int value){
     // Very basic implementation
     for (int i=0; i<self->len; i++){
         if (i == index){
-            self->array[i] == value;
+            self->array[i] = value;
             return;
         }
     }
@@ -41,7 +41,7 @@ void insert(DynamicArray* self, int index, int value){
 int pop(DynamicArray* self){
     // Very basic implementation
     int removed_element = self->array[--self->len];
-    self->array[self->len] = NULL;
+    self->array[self->len] = 0;
     
     return removed_element;
 }
@@ -53,7 +53,7 @@ int remove(DynamicArray* self, int index){
     for (int i=index; i<self->len; i++){
         self->array[i] = self->array[i+1];
     }
-    self->array[--self->len] = NULL;
+    self->array[--self->len] = 0;
 
     return removed_element;
 }
