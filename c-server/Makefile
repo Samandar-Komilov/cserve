@@ -1,35 +1,48 @@
 CC = gcc
 CFLAGS = -Wall -Wextra -g
 LDLIBS = -lcheck
+
+# Directories
 SRC_DIR = src
 TEST_DIR = tests
 OBJ_DIR = obj
 BIN_DIR = bin
 
-SRC = $(wildcard $(SRC_DIR)/**/*.c) $(SRC_DIR)/Server.c
-TEST_SRC = $(wildcard $(TEST_DIR)/*.c)
-OBJS = $(patsubst %.c,$(OBJ_DIR)/%.o,$(SRC:.c=.o))
-TEST_OBJS = $(patsubst %.c,$(OBJ_DIR)/%.o,$(TEST_SRC))
+# Files
+APP_SRC = $(SRC_DIR)/main.c $(SRC_DIR)/Server.c        # your main program
+LIB_SRC = $(wildcard $(SRC_DIR)/DataStructures/*.c)    # dynamic array and other libs
+TEST_SRC = $(wildcard $(TEST_DIR)/*.c)                 # test files
 
-TARGET = $(BIN_DIR)/test_runner
+APP_OBJ = $(APP_SRC:.c=.o)
+LIB_OBJ = $(LIB_SRC:.c=.o)
+TEST_OBJ = $(TEST_SRC:.c=.o)
 
-# Object rule
-$(OBJ_DIR)/%.o: %.c
-	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -c $< -o $@
+APP_BIN = $(BIN_DIR)/server_app
+TEST_BIN = $(BIN_DIR)/test_runner
 
-all: $(TARGET)
+.PHONY: all app test clean valgrind
 
-$(TARGET): $(SRC) $(TEST_SRC)
+all: app test
+
+app: $(APP_BIN)
+
+test: $(TEST_BIN)
+
+# Application build
+$(APP_BIN): $(APP_SRC) $(LIB_SRC)
+	@mkdir -p $(BIN_DIR)
+	$(CC) $(CFLAGS) -o $@ $^ 
+
+# Test runner build
+$(TEST_BIN): $(TEST_SRC) $(LIB_SRC)
+	@mkdir -p $(BIN_DIR)
 	$(CC) $(CFLAGS) -o $@ $^ $(LDLIBS)
 
-test: $(TARGET)
-	./$(TARGET)
+run: app
+	./$(APP_BIN)
 
-valgrind: $(TARGET)
-	valgrind --leak-check=full ./$(TARGET)
+valgrind: test
+	valgrind --leak-check=full ./$(TEST_BIN)
 
 clean:
-	rm -rf $(OBJ_DIR)/*.o $(TARGET)
-
-.PHONY: all test valgrind clean
+	rm -rf $(OBJ_DIR) $(BIN_DIR)

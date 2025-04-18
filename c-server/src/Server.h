@@ -17,8 +17,6 @@
 #include <netinet/in.h>
 
 
-typedef struct Server Server;
-
 typedef struct Server {
     int domain;
     int service;
@@ -28,6 +26,8 @@ typedef struct Server {
     int queue;
     struct sockaddr_in address;
     int socket;
+
+    void (*launch)(struct Server *self);
 } Server;
 
 
