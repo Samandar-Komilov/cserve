@@ -9,19 +9,19 @@ The overall plan will be as follows:
 
 
 ### 0️⃣ Basic TCP Server
-**Goal** 
+**Goal**  
 Create a foundation that listens for and accepts TCP connections, setting up the socket infrastructure for later HTTP functionality. 
 
-**Implementation** 
+**Implementation**  
 Use a `Server` struct to store socket configuration. Implement `server_constructor` to initialize the struct, create a socket with `socket()`, bind it to a port using `bind()` and start listening with `listen()`. Don't forget to set the `S0_REUSEADDR` option to avoid "address already in use" errors.
 Create a `launch()` function that runs an infinite loop, calling `accept()` to handle incoming connections and logging each connection.
 
 
 ### 1️⃣ Basic HTTP Server
-**Goal**
+**Goal**  
 Extend the TCP server to parse HTTP requests and respond with a static HTTP response, introducing HTTP protocol handling.
 
-**Implementation**
+**Implementation**  
 Define an `HTTPRequest` struct to store parsed request data:
 - `method`, `path` and `version`
 - `Headers`
@@ -32,18 +32,18 @@ Define an `HTTPRequest` struct to store parsed request data:
 Implement `http_request_parser` to read the request from a client socket, tokenize the request line, and parse headers until an empty line (`\r\n`).
 Create an `HTTPResponse` struct for responses.
 
-**Best Practices**
+**Best Practices**  
 Allocate memory dynamically for `HTTPRequest` fields (e.g., method, headers) and free them with `http_request_free` to prevent leaks. Test with curl http://localhost:8080 to verify the response. Use Valgrind to check for memory leaks in `http_request_parse`.
 
 
 ### 2️⃣ Static File Serving
-**Goal**
+**Goal**  
 Serve static files (e.g., HTML, CSS, images) from a directory, adding a key Nginx feature.
 
-**Implementation**
+**Implementation**  
 Introduce an `HTTPServer` struct to manage HTTP-specific state: a reference to the `Server` struct, a `static_dir` path, and a `handler` function pointer for processing requests. The constructor should also initialize `static_dir`.
 
-**Best Practices**
+**Best Practices**  
 - Allocate a buffer for file contents dynamically based on file size.
 - Test with a browser to verify files (e.g., index.html, images) are served correctly.
 - Log file access errors (e.g., “File not found”) to debug issues.
@@ -51,10 +51,10 @@ Introduce an `HTTPServer` struct to manage HTTP-specific state: a reference to t
 - Check for path traversal attacks (e.g., `../../etc/passwd`) by validating the resolved path stays within `static_dir`.
 
 ### 3️⃣ Reverse Proxy
-**Goal**
+**Goal**  
 Forward HTTP requests to a backend server, let's say FastAPI app on Uvicorn, enabling the server to act as a reverse proxy. Relay the backend’s response back to the client.
 
-**Implementation**
+**Implementation**  
 Extend `HTTPServer` to include a `proxy_backends` array, which includes strings like `“localhost:8000”` and `backend_count`. Implement `proxy_request` to:
 - Create a new socket to connect to the backend using `socket()` and `connect()`.
 - Reconstruct the client’s HTTP request (method, path, headers) and send it to the backend.
@@ -62,29 +62,29 @@ Extend `HTTPServer` to include a `proxy_backends` array, which includes strings 
 
 Update the handler function in `HTTPServer` to decide whether to serve a static file or proxy based on the request path (e.g., proxy `/api/*` to the backend, serve `/static/*` from disk).
 
-**Best Practices**
+**Best Practices**  
 - Handle connection failures (e.g., backend down) by returning a `502 Bad Gateway` response.
 - Test with a Python FastAPI app running on `localhost:8000` and `curl` to verify proxying.
 - Use `strace` to debug socket issues between the server and backend.
 
 ### 4️⃣ Load Balancing
-**Goal**
+**Goal**  
 Distribute requests across multiple backends to improve scalability, adding load balancing to the reverse proxy. Support multiple backend servers (e.g., `localhost:8000`, `localhost:8001`). Implement a **round-robin algorithm** to distribute requests evenly.
 
-**Implementation**
+**Implementation**  
 Define a `Backend` struct with host (e.g., `“localhost”`) and port (e.g., `8000`). Store backends in `HTTPServer`’s `proxy_backends` as an array of strings, parsed into `Backend` structs at runtime. Implement `choose_backend` to select the next backend in a round-robin fashion, tracking the current index with a static variable. Modify `proxy_request` to use the selected backend’s host and port. Update `handler` to call `choose_backend` for proxied requests.
 
-**Best Practices**
+**Best Practices**  
 - Log which backend handles each request to verify distribution.
 - Test with multiple FastAPI instances (e.g., on ports `8000` and `8001`) and `wrk` to simulate load.
 - Assume backends are always available, adding health checks in a future iteration if needed.
 
 
 ### 5️⃣ Config File (.ini)
-**Goal**
+**Goal**  
 Add a configuration file to make the server flexible, allowing users to specify the port, static directory, and backends without recompiling. Parse a simple `.ini` configuration file to set server parameters. Use the parsed values to initialize the `Server` and `HTTPServer` structs.
 
-**Implementation**
+**Implementation**  
 Define a config file format like:
 ```ini
 port=8080
@@ -94,18 +94,18 @@ backend=localhost:8001
 ```
 Implement `parse_config` to read the file line by line, extracting key-value pairs (e.g., `port`, `static_dir`, `backend`). Then store parsed backends in a dynamic array for `HTTPServer`. Update `main` to call `parse_config` and pass the results to `server_constructor` and `http_server_constructor`.
 
-**Best Practices**
+**Best Practices**  
 - Validate config values (e.g., port range, valid directory) to prevent crashes.
 - Provide default values (e.g., port `8080`) if the config file is missing.
 - Test with different config files to ensure flexibility.
 
 
 ### 6️⃣ Concurrency (Event-based)
-**Goal**
+**Goal**  
 Enable the server to handle multiple clients concurrently using an event-based model, improving performance and scalability.
 - Replace the single-threaded `accept()` loop with an event-driven model to handle multiple connections simultaneously. That way, process client requests (parsing, static files, proxying) without blocking other clients.
 
-**Implementation**
+**Implementation**  
 Use `select()` (then `epoll()` later on) to monitor multiple sockets for events.
 Modify `launch()` to:
 - Initialize a `fd_set` for `select`.
@@ -115,7 +115,7 @@ Modify `launch()` to:
 
 Maintain a dynamic array or list of active client sockets in HTTPServer to track state.
 
-**Best Practices**
+**Best Practices**  
 - Limit the number of concurrent connections (e.g., `1024`) to avoid `select`’s file descriptor limit.
 - Test with `wrk` to measure throughput under load (e.g., 100 concurrent clients).
 - Use `Valgrind` to ensure no memory leaks in the event loop.
