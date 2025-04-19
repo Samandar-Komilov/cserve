@@ -5,8 +5,9 @@ LDLIBS = -lcheck
 # Directories
 SRC_DIR = src
 TEST_DIR = tests
-OBJ_DIR = obj
-BIN_DIR = bin
+BUILD_DIR = build
+OBJ_DIR = $(BUILD_DIR)/obj
+BIN_DIR = $(BUILD_DIR)/bin
 
 # Files
 APP_SRC = $(SRC_DIR)/main.c $(SRC_DIR)/Server.c        # your main program
