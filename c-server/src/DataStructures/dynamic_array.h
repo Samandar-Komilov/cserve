@@ -12,6 +12,15 @@
 // dynamic_array.c
 
 
+
+enum {
+    DA_SUCCESS = 0,
+    DA_ERROR_ALLOC = -1,
+    DA_ERROR_INDEX = -2
+};
+
+
+
 typedef struct DynamicArray {
     int *array;
     int len;
@@ -28,7 +37,7 @@ typedef struct DynamicArray {
 
 DynamicArray dynamic_array_init(int capacity);
 
-void append(DynamicArray *self, int value);
-void insert(DynamicArray *self, int index, int value);
+int append(DynamicArray *self, int value);
+int insert(DynamicArray *self, int index, int value);
 int pop(DynamicArray *self);
 int remove(DynamicArray *self, int index);
