@@ -18,7 +18,7 @@ APP_OBJ = $(APP_SRC:.c=.o)
 LIB_OBJ = $(LIB_SRC:.c=.o)
 TEST_OBJ = $(TEST_SRC:.c=.o)
 
-APP_BIN = $(BIN_DIR)/server_app
+APP_BIN = $(BIN_DIR)/cserver
 TEST_BIN = $(BIN_DIR)/test_runner
 
 .PHONY: all app test clean valgrind
