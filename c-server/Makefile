@@ -42,6 +42,9 @@ $(TEST_BIN): $(TEST_SRC) $(LIB_SRC)
 run: app
 	./$(APP_BIN)
 
+runtest: test
+	./$(TEST_BIN)
+
 valgrind: test
 	valgrind --leak-check=full ./$(TEST_BIN)
 

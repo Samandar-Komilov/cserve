@@ -18,6 +18,7 @@
 // Utility functions
 int resize_array(DynamicArray *self, int new_capacity)
 {
+    if (new_capacity < MIN_CAPACITY) return DA_ERROR_ALLOC;
     int *temp_arr = realloc(self->array, new_capacity * sizeof(int));
     if (!temp_arr) return DA_ERROR_ALLOC;
     self->array    = temp_arr;
@@ -30,6 +31,7 @@ int resize_array(DynamicArray *self, int new_capacity)
 int append(DynamicArray *self, int value)
 {
     if (!self) return DA_ERROR_NULLPTR;
+    if (self->capacity < MIN_CAPACITY) return DA_ERROR_ALLOC;
 
     if (self->len == self->capacity)
     {
@@ -107,7 +109,7 @@ int pop(DynamicArray *self)
     int removed_element    = self->array[--self->len];
     self->array[self->len] = 0;
 
-    if (self->len == self->capacity * 0.25)
+    if (self->len == self->capacity * 0.25 && self->len > MIN_CAPACITY)
     {
         self->capacity /= 2;
         if (resize_array(self, self->capacity) < 0)

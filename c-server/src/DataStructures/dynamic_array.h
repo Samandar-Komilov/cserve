@@ -11,6 +11,8 @@
 //
 // dynamic_array.c
 
+#define MIN_CAPACITY 2
+
 enum
 {
     DA_SUCCESS       = 0,
@@ -33,6 +35,8 @@ typedef struct DynamicArray
 } DynamicArray;
 
 // Prototypes
+
+int resize_array(DynamicArray *self, int new_capacity);
 
 DynamicArray dynamic_array_init(int capacity);
 int dynamic_array_free(DynamicArray *self);
