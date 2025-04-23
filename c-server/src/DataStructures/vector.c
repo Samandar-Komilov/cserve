@@ -1,22 +1,18 @@
-//
-// =========
-// 1lang1server/c-server/DataStructures
-//
-// =========
-//
-//
-// Created by Samandar Komil on 18/04/2025.
-//
-//
-//
-// dynamic_array.c
+/**
+ * @file    vector.c
+ * @author  Samandar Komil
+ * @date    19 April 2025
+ * @brief   Defines the Vector struct and its methods
+ *
+ */
 
 #include <stdlib.h>
 #include <stdio.h>
-#include "dynamic_array.h"
+#include "vector.h"
+#include "../common.h"
 
 // Utility functions
-int resize_array(DynamicArray *self, int new_capacity)
+int resize_array(Vector *self, int new_capacity)
 {
     if (new_capacity < MIN_CAPACITY) return DA_ERROR_ALLOC;
     int *temp_arr = realloc(self->array, new_capacity * sizeof(int));
@@ -26,9 +22,9 @@ int resize_array(DynamicArray *self, int new_capacity)
     return DA_SUCCESS;
 }
 
-// DynamicArray "object" methods (function pointers)
+// Vector "object" methods (function pointers)
 
-int append(DynamicArray *self, int value)
+int append(Vector *self, int value)
 {
     if (!self) return DA_ERROR_NULLPTR;
     if (self->capacity < MIN_CAPACITY) return DA_ERROR_ALLOC;
@@ -46,7 +42,7 @@ int append(DynamicArray *self, int value)
     return DA_SUCCESS;
 }
 
-int insert(DynamicArray *self, int index, int value)
+int insert(Vector *self, int index, int value)
 {
     if (!self) return DA_ERROR_NULLPTR;
 
@@ -103,7 +99,7 @@ int insert(DynamicArray *self, int index, int value)
     }
 }
 
-int pop(DynamicArray *self)
+int pop(Vector *self)
 {
     if (!self) return DA_ERROR_NULLPTR;
     int removed_element    = self->array[--self->len];
@@ -121,7 +117,7 @@ int pop(DynamicArray *self)
     return removed_element;
 }
 
-int pop_at(DynamicArray *self, int index)
+int pop_at(Vector *self, int index)
 {
     if (!self) return DA_ERROR_NULLPTR;
     int removed_element = self->array[index];
@@ -134,7 +130,7 @@ int pop_at(DynamicArray *self, int index)
     return removed_element;
 }
 
-void list_elements(DynamicArray *self)
+void list_elements(Vector *self)
 {
     for (int i = 0; i < self->len; i++)
     {
@@ -145,14 +141,14 @@ void list_elements(DynamicArray *self)
 
 // Constructor function
 
-DynamicArray dynamic_array_init(int capacity)
+Vector vector_init(int capacity)
 {
-    DynamicArray array;
+    Vector array;
     array.array    = malloc(capacity * sizeof(int));
     array.len      = 0;
     array.capacity = (capacity >= 2) ? capacity : 2;
 
-    // So-called "methods" of DynamicArray struct
+    // So-called "methods" of Vector struct
     array.append        = append;
     array.insert        = insert;
     array.pop           = pop;
@@ -162,7 +158,7 @@ DynamicArray dynamic_array_init(int capacity)
     return array;
 }
 
-int dynamic_array_free(DynamicArray *self)
+int vector_free(Vector *self)
 {
     if (!self) return DA_ERROR_NULLPTR;
     free(self->array);

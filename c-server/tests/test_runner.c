@@ -3,18 +3,18 @@
  * @author  Samandar Komil
  * @date    22 April 2025
  * @brief   Main Test Runners
- * 
+ *
  */
 
 #include <check.h>
 
-Suite* dynamic_array_suite(void);
+Suite *vector_suite(void);
 // Suite* server_suite(void);  <-- for future
 
-
-int main(void) {
-    int failed = 0;
-    SRunner *sr = srunner_create(dynamic_array_suite());
+int main(void)
+{
+    int failed  = 0;
+    SRunner *sr = srunner_create(vector_suite());
 
     // srunner_add_suite(sr, server_suite());  <-- add more as you grow
 

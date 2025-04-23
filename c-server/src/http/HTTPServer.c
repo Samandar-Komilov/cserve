@@ -8,8 +8,6 @@
 
 #include "HTTPServer.h"
 
-#define MAX_BUFFER_SIZE 30000
-
 void launch(HTTPServer *self)
 {
     if (bind(self->server->socket, (struct sockaddr *)&self->server->address,

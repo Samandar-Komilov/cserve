@@ -18,6 +18,7 @@
 #include <unistd.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include "common.h"
 
 typedef struct Server
 {

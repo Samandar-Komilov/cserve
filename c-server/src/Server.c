@@ -10,8 +10,6 @@
 
 #include "Server.h"
 
-#define MAX_BUFFER_SIZE 30000
-
 Server *server_constructor(int domain, int service, int protocol, uint32_t interface, int port,
                            int queue)
 {
