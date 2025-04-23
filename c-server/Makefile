@@ -10,7 +10,7 @@ OBJ_DIR = $(BUILD_DIR)/obj
 BIN_DIR = $(BUILD_DIR)/bin
 
 # Files
-APP_SRC = $(SRC_DIR)/main.c $(SRC_DIR)/Server.c        # your main program
+APP_SRC = $(SRC_DIR)/main.c $(SRC_DIR)/server.c $(SRC_DIR)/http/server.c $(SRC_DIR)/http/request.c        # your main program
 LIB_SRC = $(wildcard $(SRC_DIR)/DataStructures/*.c)    # dynamic array and other libs
 TEST_SRC = $(wildcard $(TEST_DIR)/*.c)                 # test files
 
@@ -41,6 +41,9 @@ $(TEST_BIN): $(TEST_SRC) $(LIB_SRC)
 
 run: app
 	./$(APP_BIN)
+
+runtest: test
+	./$(TEST_BIN)
 
 valgrind: test
 	valgrind --leak-check=full ./$(TEST_BIN)

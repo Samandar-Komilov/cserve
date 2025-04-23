@@ -6,36 +6,23 @@
  * @brief   Main file to run the program.
  */
 
-#include <stdio.h>
-#include <string.h>
 #include <unistd.h>
-#include "Server.h"
-#include "DataStructures/dynamic_array.h"
+#include "common.h"
+#include "./http/server.h"
+#include "DataStructures/vector.h"
 
 int main(void)
 {
-    // Server TCPServer = server_constructor(AF_INET, SOCK_STREAM, 0, INADDR_ANY, 8000, 10);
-    // TCPServer.launch(&TCPServer);
+    HTTPServer *httpserver_ptr = httpserver_constructor(8080);
+    int is_launched            = httpserver_ptr->launch(httpserver_ptr);
+    if (is_launched < 0)
+    {
+        httpserver_destructor(httpserver_ptr);
+        fprintf(stderr, "HTTPServer launch function faced an error, with code %d.\n", is_launched);
+        exit(1);
+    }
 
-    DynamicArray arr = dynamic_array_init(1);
-
-    printf("===== Testing started =====\n");
-    arr.append(&arr, 100);
-    arr.append(&arr, 200);
-    arr.list_elements(&arr);
-
-    arr.insert(&arr, 1, 300);
-    arr.list_elements(&arr);
-
-    arr.pop(&arr);
-    arr.list_elements(&arr);
-
-    arr.pop_at(&arr, 0);
-    arr.list_elements(&arr);
-
-    dynamic_array_free(&arr);
-
-    printf("===== Testing finished =====\n");
+    httpserver_destructor(httpserver_ptr);
 
     return 0;
 }
