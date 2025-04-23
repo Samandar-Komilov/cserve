@@ -11,8 +11,11 @@
 #ifndef Server_h
 #define Server_h
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <string.h>
+#include <unistd.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 
@@ -27,7 +30,7 @@ typedef struct Server
     struct sockaddr_in address;
     int socket;
 
-    void (*launch)(struct Server *self);
+    // void (*launch)(struct Server *self);
 } Server;
 
 Server *server_constructor(int domain, int service, int protocol, uint32_t interface, int port,

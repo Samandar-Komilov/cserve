@@ -23,10 +23,10 @@ typedef struct HTTPServer
     struct HTTPServer *(*parse_http_request)(struct HTTPServer *self, char *request);
 } HTTPServer;
 
-HTTPServer *parse_http_request(HTTPServer *httpserver, char *request);
-HTTPServer *parse_request_line(HTTPServer *httpserver, char *request_line);
-HTTPServer *parse_headers(HTTPServer *httpserver, char *headers);
-HTTPServer *parse_body(HTTPServer *httpserver, char *body);
+HTTPServer *parse_http_request(HTTPServer *httpserver_ptr, char *request);
+HTTPServer *parse_request_line(HTTPServer *httpserver_ptr, char *request_line);
+HTTPServer *parse_headers(HTTPServer *httpserver_ptr, char *headers);
+HTTPServer *parse_body(HTTPServer *httpserver_ptr, char *body);
 
 HTTPServer *httpserver_constructor(int port);
 void httpserver_destructor(HTTPServer *httpserver_ptr);
