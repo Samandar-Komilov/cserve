@@ -8,13 +8,10 @@
  *          https://github.com/ericomeehan/libeom
  */
 
-#ifndef Server_h
-#define Server_h
+#ifndef SERVER_H
+#define SERVER_H
 
-#include <stdio.h>
-#include <stdlib.h>
 #include <stdint.h>
-#include <string.h>
 #include <unistd.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -37,4 +34,4 @@ typedef struct Server
 Server *server_constructor(int domain, int service, int protocol, uint32_t interface, int port,
                            int queue);
 void server_destructor(Server *server);
-#endif /* Server_h */
+#endif /* SERVER_H */

@@ -8,7 +8,7 @@
  *          https://github.com/ericomeehan/libeom
  */
 
-#include "Server.h"
+#include "server.h"
 
 Server *server_constructor(int domain, int service, int protocol, uint32_t interface, int port,
                            int queue)

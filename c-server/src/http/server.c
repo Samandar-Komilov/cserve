@@ -6,21 +6,19 @@
  *
  */
 
-#include "HTTPServer.h"
+#include "server.h"
 
-void launch(HTTPServer *self)
+int launch(HTTPServer *self)
 {
     if (bind(self->server->socket, (struct sockaddr *)&self->server->address,
              sizeof(self->server->address)) < 0)
     {
-        perror("Failed to bind socket...");
-        exit(1);
+        return SOCKET_BIND_ERROR;
     }
 
     if ((listen(self->server->socket, self->server->queue)) < 0)
     {
-        perror("Failed to listen socket...");
-        exit(1);
+        return SOCKET_LISTEN_ERROR;
     }
 
     printf("\033[32m===== Waiting for connections on port %d =====\033[0m\n", self->server->port);
@@ -32,10 +30,14 @@ void launch(HTTPServer *self)
         int new_socket     = accept(self->server->socket, (struct sockaddr *)&self->server->address,
                                     (socklen_t *)&address_length);
         read(new_socket, buffer, MAX_BUFFER_SIZE);
-        // printf("%s\n", buffer);
-        self->parse_http_request(self, buffer);
+        printf("%s\n", buffer);
 
-        // printf("%s %s %s", self->request[0], self->request[1], self->request[2]);
+        /**
+         * HTTPRequest httprequest_ptr = self->parse_http_request(self, buffer);
+         *
+         * HTTPResponse httpresponse_ptr = self->request_handler(self, httprequest_ptr);
+         *
+         */
 
         char *response = "HTTP/1.1 200 OK\r\n"
                          "Content-Type: text/plain\r\n"
@@ -50,23 +52,25 @@ void launch(HTTPServer *self)
 
 HTTPServer *parse_http_request(HTTPServer *httpserver_ptr, char *request)
 {
+    HTTPRequest *request_ptr = httprequest_constructor();
+
     char *token = strtok(request, "\r\n");
 
     // 1. Request Line
-    parse_request_line(httpserver_ptr, token);
+    httpserver_ptr->parse_request_line(request_ptr, token);
     token = strtok(NULL, "\r\n");
 
     // 2. Headers
-    parse_headers(httpserver_ptr, token);
+    httpserver_ptr->parse_headers(request_ptr, token);
     token = strtok(NULL, "\r\n");
 
     // 3. Body
-    parse_body(httpserver_ptr, token);
+    httpserver_ptr->parse_body(request_ptr, token);
 
     return httpserver_ptr;
 }
 
-HTTPServer *parse_request_line(HTTPServer *httpserver_ptr, char *request_line)
+HTTPRequest *parse_request_line(HTTPRequest *request_ptr, char *request_line)
 {
     char *method  = (char *)malloc(10 * sizeof(char));
     char *path    = (char *)malloc(100 * sizeof(char));
@@ -87,23 +91,23 @@ HTTPServer *parse_request_line(HTTPServer *httpserver_ptr, char *request_line)
 
     printf("Request Line:\n%s %s %s\n", method, path, version);
 
-    httpserver_ptr->request[0] = method;
-    httpserver_ptr->request[1] = path;
-    httpserver_ptr->request[2] = version;
+    request_ptr->request_line[0] = method;
+    request_ptr->request_line[1] = path;
+    request_ptr->request_line[2] = version;
 
-    return httpserver_ptr;
+    return request_ptr;
 }
 
-HTTPServer *parse_headers(HTTPServer *httpserver_ptr, char *headers)
+HTTPRequest *parse_headers(HTTPRequest *request_ptr, char *headers)
 {
     printf("Headers:\n%s\n", headers);
-    return httpserver_ptr;
+    return request_ptr;
 }
 
-HTTPServer *parse_body(HTTPServer *httpserver_ptr, char *body)
+HTTPRequest *parse_body(HTTPRequest *request_ptr, char *body)
 {
     printf("Body:\n%s\n", body);
-    return httpserver_ptr;
+    return request_ptr;
 }
 
 // HTTPServer constructor
@@ -116,6 +120,9 @@ HTTPServer *httpserver_constructor(int port)
 
     httpserver_ptr->launch             = launch;
     httpserver_ptr->parse_http_request = parse_http_request;
+    httpserver_ptr->parse_request_line = parse_request_line;
+    httpserver_ptr->parse_headers      = parse_headers;
+    httpserver_ptr->parse_body         = parse_body;
 
     return httpserver_ptr;
 }
@@ -125,8 +132,6 @@ void httpserver_destructor(HTTPServer *httpserver_ptr)
     if (httpserver_ptr)
     {
         server_destructor(httpserver_ptr->server);
-        // If you allocate headers/body dynamically, free them too:
-        // free(httpserver->headers); free(httpserver->body);
         free(httpserver_ptr);
     }
 }

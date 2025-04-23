@@ -14,41 +14,41 @@
 // Utility functions
 int resize_array(Vector *self, int new_capacity)
 {
-    if (new_capacity < MIN_CAPACITY) return DA_ERROR_ALLOC;
+    if (new_capacity < MIN_CAPACITY) return VECTOR_ALLOC_ERROR;
     int *temp_arr = realloc(self->array, new_capacity * sizeof(int));
-    if (!temp_arr) return DA_ERROR_ALLOC;
+    if (!temp_arr) return VECTOR_ALLOC_ERROR;
     self->array    = temp_arr;
     self->capacity = new_capacity;
-    return DA_SUCCESS;
+    return VECTOR_SUCCESS;
 }
 
 // Vector "object" methods (function pointers)
 
 int append(Vector *self, int value)
 {
-    if (!self) return DA_ERROR_NULLPTR;
-    if (self->capacity < MIN_CAPACITY) return DA_ERROR_ALLOC;
+    if (!self) return VECTOR_NULLPTR_ERROR;
+    if (self->capacity < MIN_CAPACITY) return VECTOR_ALLOC_ERROR;
 
     if (self->len == self->capacity)
     {
         self->capacity *= 2;
         if (resize_array(self, self->capacity) < 0)
         {
-            return DA_ERROR_ALLOC;
+            return VECTOR_ALLOC_ERROR;
         }
     }
     self->array[self->len++] = value;
 
-    return DA_SUCCESS;
+    return VECTOR_SUCCESS;
 }
 
 int insert(Vector *self, int index, int value)
 {
-    if (!self) return DA_ERROR_NULLPTR;
+    if (!self) return VECTOR_NULLPTR_ERROR;
 
     if (index > self->len || index < 0)
     {
-        return DA_ERROR_INDEX;
+        return VECTOR_INDEX_ERROR;
     }
 
     // Insert in the beginning
@@ -59,7 +59,7 @@ int insert(Vector *self, int index, int value)
             self->array[i] = self->array[i - 1];
         }
         self->array[0] = value;
-        return DA_SUCCESS;
+        return VECTOR_SUCCESS;
     }
 
     // Insert in the end
@@ -70,11 +70,11 @@ int insert(Vector *self, int index, int value)
             self->capacity *= 2;
             if (resize_array(self, self->capacity) < 0)
             {
-                return DA_ERROR_ALLOC;
+                return VECTOR_ALLOC_ERROR;
             }
         }
         self->array[self->len++] = value;
-        return DA_SUCCESS;
+        return VECTOR_SUCCESS;
     }
 
     // Insert in the middle
@@ -87,7 +87,7 @@ int insert(Vector *self, int index, int value)
                 self->capacity *= 2;
                 if (resize_array(self, self->capacity) < 0)
                 {
-                    return DA_ERROR_ALLOC;
+                    return VECTOR_ALLOC_ERROR;
                 }
             }
             self->array[i] = self->array[i - 1];
@@ -95,13 +95,13 @@ int insert(Vector *self, int index, int value)
         self->array[index] = value;
 
         self->len++;
-        return DA_SUCCESS;
+        return VECTOR_SUCCESS;
     }
 }
 
 int pop(Vector *self)
 {
-    if (!self) return DA_ERROR_NULLPTR;
+    if (!self) return VECTOR_NULLPTR_ERROR;
     int removed_element    = self->array[--self->len];
     self->array[self->len] = 0;
 
@@ -110,7 +110,7 @@ int pop(Vector *self)
         self->capacity /= 2;
         if (resize_array(self, self->capacity) < 0)
         {
-            return DA_ERROR_ALLOC;
+            return VECTOR_ALLOC_ERROR;
         }
     }
 
@@ -119,7 +119,7 @@ int pop(Vector *self)
 
 int pop_at(Vector *self, int index)
 {
-    if (!self) return DA_ERROR_NULLPTR;
+    if (!self) return VECTOR_NULLPTR_ERROR;
     int removed_element = self->array[index];
     for (int i = index; i < self->len; i++)
     {
@@ -160,7 +160,7 @@ Vector vector_init(int capacity)
 
 int vector_free(Vector *self)
 {
-    if (!self) return DA_ERROR_NULLPTR;
+    if (!self) return VECTOR_NULLPTR_ERROR;
     free(self->array);
     return 0;
 }

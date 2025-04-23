@@ -15,7 +15,7 @@ START_TEST(test_resize_array_success)
     Vector arr       = vector_init(1);
     int new_capacity = 2;
     int result       = resize_array(&arr, new_capacity);
-    ck_assert_int_eq(result, DA_SUCCESS);
+    ck_assert_int_eq(result, VECTOR_SUCCESS);
     ck_assert_int_eq(arr.capacity, new_capacity);
     vector_free(&arr);
 }
@@ -26,7 +26,7 @@ START_TEST(test_resize_array_failure)
     Vector arr       = vector_init(1);
     int new_capacity = 0;
     int result       = resize_array(&arr, new_capacity);
-    ck_assert_int_eq(result, DA_ERROR_ALLOC);
+    ck_assert_int_eq(result, VECTOR_ALLOC_ERROR);
     vector_free(&arr);
 }
 END_TEST
@@ -36,7 +36,7 @@ START_TEST(test_append_success)
     Vector arr = vector_init(1);
     int value  = 100;
     int result = arr.append(&arr, value);
-    ck_assert_int_eq(result, DA_SUCCESS);
+    ck_assert_int_eq(result, VECTOR_SUCCESS);
     ck_assert_int_eq(arr.array[0], value);
     vector_free(&arr);
 }
@@ -47,7 +47,7 @@ START_TEST(test_append_failure_nullptr)
     Vector arr = vector_init(1);
     int value  = 100;
     int result = arr.append(NULL, value);
-    ck_assert_int_eq(result, DA_ERROR_NULLPTR);
+    ck_assert_int_eq(result, VECTOR_NULLPTR_ERROR);
     vector_free(&arr);
 }
 END_TEST
@@ -59,7 +59,7 @@ START_TEST(test_append_failure_alloc)
     // Simulate allocation failure
     arr.capacity = 0;
     int result   = arr.append(&arr, value);
-    ck_assert_int_eq(result, DA_ERROR_ALLOC);
+    ck_assert_int_eq(result, VECTOR_ALLOC_ERROR);
     vector_free(&arr);
 }
 END_TEST
@@ -70,7 +70,7 @@ START_TEST(test_insert_success_beginning)
     int value  = 100;
     int index  = 0;
     int result = arr.insert(&arr, index, value);
-    ck_assert_int_eq(result, DA_SUCCESS);
+    ck_assert_int_eq(result, VECTOR_SUCCESS);
     ck_assert_int_eq(arr.array[0], value);
     vector_free(&arr);
 }
@@ -83,7 +83,7 @@ START_TEST(test_insert_success_end)
     int index  = 1;
     arr.append(&arr, 50);
     int result = arr.insert(&arr, index, value);
-    ck_assert_int_eq(result, DA_SUCCESS);
+    ck_assert_int_eq(result, VECTOR_SUCCESS);
     ck_assert_int_eq(arr.array[1], value);
     vector_free(&arr);
 }
@@ -96,7 +96,7 @@ START_TEST(test_insert_success_middle)
     int index  = 1;
     // arr.append(&arr, 50);
     int result = arr.insert(&arr, index, value);
-    ck_assert_int_eq(result, DA_ERROR_INDEX);
+    ck_assert_int_eq(result, VECTOR_INDEX_ERROR);
     vector_free(&arr);
 }
 END_TEST
@@ -107,7 +107,7 @@ START_TEST(test_insert_failure_nullptr)
     int value  = 100;
     int index  = 0;
     int result = arr.insert(NULL, index, value);
-    ck_assert_int_eq(result, DA_ERROR_NULLPTR);
+    ck_assert_int_eq(result, VECTOR_NULLPTR_ERROR);
     vector_free(&arr);
 }
 END_TEST
@@ -118,7 +118,7 @@ START_TEST(test_insert_failure_index)
     int value  = 100;
     int index  = 2;
     int result = arr.insert(&arr, index, value);
-    ck_assert_int_eq(result, DA_ERROR_INDEX);
+    ck_assert_int_eq(result, VECTOR_INDEX_ERROR);
     vector_free(&arr);
 }
 END_TEST
@@ -139,7 +139,7 @@ START_TEST(test_pop_failure_nullptr)
 {
     Vector arr = vector_init(1);
     int result = arr.pop(NULL);
-    ck_assert_int_eq(result, DA_ERROR_NULLPTR);
+    ck_assert_int_eq(result, VECTOR_NULLPTR_ERROR);
     vector_free(&arr);
 }
 END_TEST
@@ -162,7 +162,7 @@ START_TEST(test_pop_at_failure_nullptr)
 {
     Vector arr = vector_init(1);
     int result = arr.pop_at(NULL, 0);
-    ck_assert_int_eq(result, DA_ERROR_NULLPTR);
+    ck_assert_int_eq(result, VECTOR_NULLPTR_ERROR);
     vector_free(&arr);
 }
 END_TEST
