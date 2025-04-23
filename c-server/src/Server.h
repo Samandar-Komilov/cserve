@@ -13,6 +13,7 @@
 #define Server_h
 
 
+#include <stdlib.h>
 #include <stdint.h>
 #include <sys/socket.h>
 #include <netinet/in.h>

@@ -1,6 +1,13 @@
+/**
+ * @file    test_runner.c
+ * @author  Samandar Komil
+ * @date    22 April 2025
+ * @brief   Main Test Runners
+ * 
+ */
+
 #include <check.h>
 
-// Declare your suite functions
 Suite* dynamic_array_suite(void);
 // Suite* server_suite(void);  <-- for future
 

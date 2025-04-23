@@ -1,3 +1,11 @@
+/**
+ * @file    dynamic_array_test.c
+ * @author  Samandar Komil
+ * @date    23 April 2025
+ * @brief   Tests for dynamic_array.c
+ * 
+ */
+
 #include <check.h>
 #include "../src/DataStructures/dynamic_array.h"
 
