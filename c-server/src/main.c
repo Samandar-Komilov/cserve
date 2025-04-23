@@ -14,8 +14,11 @@
 
 int main(void)
 {
-    HTTPServer httpserver = httpserver_constructor(8080);
-    httpserver.launch(&httpserver);
+    HTTPServer *httpserver_ptr = httpserver_constructor(8080);
+    httpserver_ptr->launch(httpserver_ptr);
+
+    printf("%s %s %s\n", httpserver_ptr->request[0], httpserver_ptr->request[1],
+           httpserver_ptr->request[2]);
 
     return 0;
 }

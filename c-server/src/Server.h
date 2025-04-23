@@ -3,23 +3,21 @@
  * @author  Samandar Komil
  * @date    13 April 2025
  * @brief   Defines the Server struct and constructor for TCP server behavior.
- * 
+ *
  * @details Inspired by Eric Meehan's C library:
  *          https://github.com/ericomeehan/libeom
  */
 
-
 #ifndef Server_h
 #define Server_h
-
 
 #include <stdlib.h>
 #include <stdint.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 
-
-typedef struct Server {
+typedef struct Server
+{
     int domain;
     int service;
     int protocol;
@@ -32,8 +30,7 @@ typedef struct Server {
     void (*launch)(struct Server *self);
 } Server;
 
-
-Server server_constructor(int domain, int service, int protocol, uint32_t interface, int port, int queue);
-
-
+Server *server_constructor(int domain, int service, int protocol, uint32_t interface, int port,
+                           int queue);
+void server_destructor(Server *server);
 #endif /* Server_h */

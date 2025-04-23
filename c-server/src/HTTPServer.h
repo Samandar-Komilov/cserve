@@ -20,14 +20,15 @@ typedef struct HTTPServer
 
     // Methods (function pointers)
     void (*launch)(struct HTTPServer *self);
+    struct HTTPServer *(*parse_http_request)(struct HTTPServer *self, char *request);
 } HTTPServer;
 
-HTTPServer *http_request_parser(HTTPServer *httpserver, char *request);
+HTTPServer *parse_http_request(HTTPServer *httpserver, char *request);
 HTTPServer *parse_request_line(HTTPServer *httpserver, char *request_line);
 HTTPServer *parse_headers(HTTPServer *httpserver, char *headers);
 HTTPServer *parse_body(HTTPServer *httpserver, char *body);
 
-HTTPServer httpserver_constructor(int port);
-int httpserver_destructor(HTTPServer *self);
+HTTPServer *httpserver_constructor(int port);
+void httpserver_destructor(HTTPServer *httpserver_ptr);
 
 #endif /* HTTPServer_h */

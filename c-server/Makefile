@@ -10,7 +10,7 @@ OBJ_DIR = $(BUILD_DIR)/obj
 BIN_DIR = $(BUILD_DIR)/bin
 
 # Files
-APP_SRC = $(SRC_DIR)/main.c $(SRC_DIR)/Server.c        # your main program
+APP_SRC = $(SRC_DIR)/main.c $(SRC_DIR)/Server.c $(SRC_DIR)/HTTPServer.c        # your main program
 LIB_SRC = $(wildcard $(SRC_DIR)/DataStructures/*.c)    # dynamic array and other libs
 TEST_SRC = $(wildcard $(TEST_DIR)/*.c)                 # test files
 
