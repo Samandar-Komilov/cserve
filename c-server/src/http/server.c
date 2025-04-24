@@ -7,6 +7,8 @@
  */
 
 #include "server.h"
+#include "request.h"
+#include "response.h"
 
 int launch(HTTPServer *self)
 {
@@ -32,25 +34,27 @@ int launch(HTTPServer *self)
         read(new_socket, buffer, MAX_BUFFER_SIZE);
         printf("%s\n", buffer);
 
-        /**
-         * HTTPRequest httprequest_ptr = self->parse_http_request(self, buffer);
-         *
-         * HTTPResponse httpresponse_ptr = self->request_handler(self, httprequest_ptr);
-         *
-         */
+        HTTPRequest *httprequest_ptr = self->parse_http_request(self, buffer);
 
-        char *response = "HTTP/1.1 200 OK\r\n"
-                         "Content-Type: text/plain\r\n"
-                         "Content-Length: 13\r\n"
-                         "\r\n"
-                         "Hello, World!";
+        HTTPResponse *httpresponse_ptr = self->request_handler(httprequest_ptr);
+
+        char *response = httpresponse_serialize(httpresponse_ptr, NULL);
+
+        // caller of the request_handler is responsible for freeing the memory
+        httpresponse_free(httpresponse_ptr);
+
+        printf("===== Response:\n%s", response);
 
         write(new_socket, response, strlen(response));
+
+        // Caller owned malloced buffer, so frees it now
+        free(response);
+
         close(new_socket);
     }
 }
 
-HTTPServer *parse_http_request(HTTPServer *httpserver_ptr, char *request)
+HTTPRequest *parse_http_request(HTTPServer *httpserver_ptr, char *request)
 {
     HTTPRequest *request_ptr = httprequest_constructor();
 
@@ -65,73 +69,105 @@ HTTPServer *parse_http_request(HTTPServer *httpserver_ptr, char *request)
     token = strtok(NULL, "\r\n");
 
     // 3. Body
-    httpserver_ptr->parse_body(request_ptr, token);
-
-    return httpserver_ptr;
-}
-
-HTTPRequest *parse_request_line(HTTPRequest *request_ptr, char *request_line)
-{
-    char *method  = (char *)malloc(10 * sizeof(char));
-    char *path    = (char *)malloc(100 * sizeof(char));
-    char *version = (char *)malloc(10 * sizeof(char));
-
-    // 1. HTTP request type
-    char *token = strtok(request_line, " ");
-    strcpy(method, token);
-
-    // 2. HTTP request path (we need splits again)
-    token = strtok(NULL, " ");
-    strcpy(path, token);
-    // parse_request_path(httpserver, token);
-
-    // 3. HTTP version
-    token = strtok(NULL, " ");
-    strcpy(version, token);
-
-    printf("Request Line:\n%s %s %s\n", method, path, version);
-
-    request_ptr->request_line[0] = method;
-    request_ptr->request_line[1] = path;
-    request_ptr->request_line[2] = version;
+    httpserver_ptr->parse_body(request_ptr, token, request_ptr->body_length);
 
     return request_ptr;
 }
 
-HTTPRequest *parse_headers(HTTPRequest *request_ptr, char *headers)
+void parse_request_line(HTTPRequest *req, char *line)
 {
-    printf("Headers:\n%s\n", headers);
-    return request_ptr;
+    char *method  = strtok(line, " ");
+    char *path    = strtok(NULL, " ");
+    char *version = strtok(NULL, " ");
+
+    req->method  = strdup(method);
+    req->path    = strdup(path);
+    req->version = strdup(version);
 }
 
-HTTPRequest *parse_body(HTTPRequest *request_ptr, char *body)
+void parse_headers(HTTPRequest *req, char *raw_headers)
 {
-    printf("Body:\n%s\n", body);
-    return request_ptr;
+    char *line = strtok(raw_headers, "\r\n");
+    while (line && req->header_count < MAX_HEADERS)
+    {
+        char *colon = strchr(line, ':');
+        if (!colon) break;
+
+        // Header: value -> Header:\0value
+        // line = Header, value = colon + 1 = value
+        *colon      = '\0';
+        char *key   = line;
+        char *value = colon + 1;
+
+        // Trim spaces
+        while (*value == ' ')
+            value++;
+
+        req->headers[req->header_count].key   = strdup(key);
+        req->headers[req->header_count].value = strdup(value);
+        req->header_count++;
+
+        line = strtok(NULL, "\r\n");
+    }
 }
 
-// HTTPServer constructor
+void parse_body(HTTPRequest *req, char *raw_body, int content_length)
+{
+    if (!raw_body || content_length == 0)
+    {
+        req->body        = NULL;
+        req->body_length = 0;
+        return;
+    }
+
+    req->body = malloc(content_length + 1);
+
+    memcpy(req->body, raw_body, content_length);
+    req->body[content_length] = '\0';
+    req->body_length          = content_length;
+}
+
+HTTPResponse *request_handler(HTTPRequest *request_ptr)
+{
+    // Simulate request processing (HTML response or proxy)
+    printf(">>> Processing the request...: %s\n", request_ptr->path);
+
+    // Ownership of returned HTTPResponse* is transferred to caller
+    // The caller is responsible for freeing the memory
+    HTTPResponse *response = httpresponse_constructor();
+
+    response->status_code   = 200;
+    response->version       = strdup("HTTP/1.1");
+    response->reason_phrase = strdup("OK");
+    response->body          = strdup("Hello, World!");
+    response->body_length   = strlen(response->body);
+
+    return response;
+}
+
 HTTPServer *httpserver_constructor(int port)
 {
     HTTPServer *httpserver_ptr = (HTTPServer *)malloc(sizeof(HTTPServer));
 
-    Server *TCPServer      = server_constructor(AF_INET, SOCK_STREAM, 0, INADDR_ANY, port, 10);
-    httpserver_ptr->server = TCPServer;
+    SocketServer *SockServer = server_constructor(AF_INET, SOCK_STREAM, 0, INADDR_ANY, port, 10);
+    httpserver_ptr->server   = SockServer;
 
     httpserver_ptr->launch             = launch;
     httpserver_ptr->parse_http_request = parse_http_request;
     httpserver_ptr->parse_request_line = parse_request_line;
     httpserver_ptr->parse_headers      = parse_headers;
     httpserver_ptr->parse_body         = parse_body;
+    httpserver_ptr->request_handler    = request_handler;
 
     return httpserver_ptr;
 }
 
 void httpserver_destructor(HTTPServer *httpserver_ptr)
 {
-    if (httpserver_ptr)
+    if (httpserver_ptr->server != NULL)
     {
         server_destructor(httpserver_ptr->server);
-        free(httpserver_ptr);
     }
+
+    free(httpserver_ptr);
 }

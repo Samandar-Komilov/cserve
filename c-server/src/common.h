@@ -15,6 +15,9 @@
 
 #define MAX_BUFFER_SIZE 30000
 
+#define MAX_HEADERS 50
+#define HTTPRESPONSE_CAPACITY 1024
+
 typedef enum
 {
     VECTOR_SUCCESS       = 700,

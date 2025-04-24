@@ -10,16 +10,16 @@
 
 #include "server.h"
 
-Server *server_constructor(int domain, int service, int protocol, uint32_t interface, int port,
-                           int queue)
+SocketServer *server_constructor(int domain, int service, int protocol, uint32_t interface,
+                                 int port, int queue)
 {
-    Server *server_ptr    = (Server *)malloc(sizeof(Server));
-    server_ptr->domain    = domain;
-    server_ptr->service   = service;
-    server_ptr->protocol  = protocol;
-    server_ptr->port      = port;
-    server_ptr->interface = interface;
-    server_ptr->queue     = queue;
+    SocketServer *server_ptr = (SocketServer *)malloc(sizeof(SocketServer));
+    server_ptr->domain       = domain;
+    server_ptr->service      = service;
+    server_ptr->protocol     = protocol;
+    server_ptr->port         = port;
+    server_ptr->interface    = interface;
+    server_ptr->queue        = queue;
 
     server_ptr->address.sin_family      = domain;
     server_ptr->address.sin_port        = htons(port);
@@ -36,7 +36,7 @@ Server *server_constructor(int domain, int service, int protocol, uint32_t inter
     return server_ptr;
 }
 
-void server_destructor(Server *server)
+void server_destructor(SocketServer *server)
 {
     if (server)
     {

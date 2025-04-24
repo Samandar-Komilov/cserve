@@ -17,6 +17,12 @@
 #include <netinet/in.h>
 #include "common.h"
 
+typedef enum
+{
+    TCP,
+    UDP
+} TransportType;
+
 typedef struct Server
 {
     int domain;
@@ -25,13 +31,14 @@ typedef struct Server
     int port;
     uint32_t interface;
     int queue;
+    TransportType transport;
     struct sockaddr_in address;
     int socket;
 
     // void (*launch)(struct Server *self);
-} Server;
+} SocketServer;
 
-Server *server_constructor(int domain, int service, int protocol, uint32_t interface, int port,
-                           int queue);
-void server_destructor(Server *server);
+SocketServer *server_constructor(int domain, int service, int protocol, uint32_t interface,
+                                 int port, int queue);
+void server_destructor(SocketServer *server);
 #endif /* SERVER_H */
