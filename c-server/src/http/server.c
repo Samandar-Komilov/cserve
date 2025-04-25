@@ -10,6 +10,23 @@
 #include "request.h"
 #include "response.h"
 
+/**
+ * @brief   Launches the HTTP server, binding and listening on the port specified in
+ *          the HTTPServer struct.
+ *
+ * @param   self  The HTTPServer struct containing the server config and methods.
+ *
+ * @returns An error code indicating the success or failure of the server launch.
+ *
+ * This function takes care of binding and listening on the configured port. It
+ * then enters an infinite loop, accepting and processing incoming requests.
+ *
+ * The function will block until a request is received, process it with the
+ * configured request_handler, and then send the response back to the client.
+ *
+ * If the bind or listen calls fail, an error code is returned. Otherwise, the
+ * function will run indefinitely until the program is terminated.
+ */
 int launch(HTTPServer *self)
 {
     if (bind(self->server->socket, (struct sockaddr *)&self->server->address,
@@ -54,6 +71,18 @@ int launch(HTTPServer *self)
     }
 }
 
+/**
+ * @brief   Parse an HTTP request string into an HTTPRequest struct.
+ *
+ * @param   httpserver_ptr  The HTTPServer struct containing the methods to parse the request.
+ * @param   request         The raw HTTP request string.
+ *
+ * @returns An HTTPRequest struct containing the parsed request information.
+ *
+ * This function takes an HTTP request string and breaks it into its components, storing them
+ * in an HTTPRequest struct. The HTTPRequest struct is dynamically allocated and the caller
+ * is responsible for freeing it.
+ */
 HTTPRequest *parse_http_request(HTTPServer *httpserver_ptr, char *request)
 {
     HTTPRequest *request_ptr = httprequest_constructor();
@@ -74,6 +103,18 @@ HTTPRequest *parse_http_request(HTTPServer *httpserver_ptr, char *request)
     return request_ptr;
 }
 
+/**
+ * @brief   Parse the request line of an HTTP request and populate the request fields.
+ * @param   req   The HTTP request to populate.
+ * @param   line  The request line as a string.
+ *
+ * The request line is expected to be in the format:
+ * <method> <path> <version>
+ *
+ * For example: GET / HTTP/1.1
+ *
+ * @note    The method, path, and version are expected to be separated by spaces.
+ */
 void parse_request_line(HTTPRequest *req, char *line)
 {
     char *method  = strtok(line, " ");
@@ -85,6 +126,18 @@ void parse_request_line(HTTPRequest *req, char *line)
     req->version = strdup(version);
 }
 
+/**
+ * @brief   Parse the headers of an HTTP request and populate the request fields.
+ * @param   req       The HTTP request to populate.
+ * @param   raw_headers  The raw headers as a string.
+ *
+ * The headers are expected to be in the format:
+ * <header_name>: <value>
+ *
+ * For example: Content-Type: text/html
+ *
+ * @note    The header name and value are expected to be separated by a colon.
+ */
 void parse_headers(HTTPRequest *req, char *raw_headers)
 {
     char *line = strtok(raw_headers, "\r\n");
@@ -111,6 +164,16 @@ void parse_headers(HTTPRequest *req, char *raw_headers)
     }
 }
 
+/**
+ * @brief   Parse the body of an HTTP request and populate the request fields.
+ * @param   req           The HTTP request to populate.
+ * @param   raw_body      The raw body as a string.
+ * @param   content_length  The length of the body as specified in the Content-Length header.
+ *
+ * The body is expected to be in the request raw string after the headers.
+ *
+ * @note    The body is copied to a new memory location, and the original memory is not modified.
+ */
 void parse_body(HTTPRequest *req, char *raw_body, int content_length)
 {
     if (!raw_body || content_length == 0)
@@ -127,6 +190,18 @@ void parse_body(HTTPRequest *req, char *raw_body, int content_length)
     req->body_length          = content_length;
 }
 
+/**
+ * @brief   Handle an HTTP request and generate an HTTP response.
+ *
+ * @param   request_ptr  A pointer to the HTTPRequest struct containing the request details.
+ *
+ * @returns A pointer to an HTTPResponse struct representing the generated response.
+ *
+ * This function processes the incoming HTTP request, prints the request path for logging,
+ * and constructs a basic HTTP response with a status code of 200, HTTP version 1.1,
+ * and a "Hello, World!" body. The caller is responsible for freeing the memory allocated
+ * for the HTTPResponse.
+ */
 HTTPResponse *request_handler(HTTPRequest *request_ptr)
 {
     // Simulate request processing (HTML response or proxy)

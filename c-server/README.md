@@ -126,10 +126,6 @@ Maintain a dynamic array or list of active client sockets in HTTPServer to track
 
 ---
 
-### 🧩 Data Structures
-- **Dynamic Arrays** for simplicity
-- Maybe I'll try **LinkedLists** with **Binary Search Trees** later on if needed
-
 
 ### 🧰 Toolkit
 

@@ -14,8 +14,8 @@ HTTPResponse *httpresponse_constructor()
     if (!res) return NULL;
 
     res->status_code   = 200;
-    res->version       = strdup("HTTP/1.1");
-    res->reason_phrase = strdup("OK");
+    res->version       = NULL;
+    res->reason_phrase = NULL;
     res->headers       = NULL;
     res->header_count  = 0;
     res->body          = NULL;

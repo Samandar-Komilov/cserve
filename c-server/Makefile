@@ -37,7 +37,7 @@ $(APP_BIN): $(APP_SRC) $(LIB_SRC)
 # Test runner build
 $(TEST_BIN): $(TEST_SRC) $(LIB_SRC)
 	@mkdir -p $(BIN_DIR)
-	$(CC) $(CFLAGS) -o $@ $^ $(LDLIBS)
+	$(CC) $(CFLAGS) -I$(SRC_DIR) -o $@ $^ $(LDLIBS)
 
 run: app
 	./$(APP_BIN)
@@ -45,8 +45,11 @@ run: app
 runtest: test
 	./$(TEST_BIN)
 
-valgrind: test
+valgrindtest: test
 	valgrind --leak-check=full ./$(TEST_BIN)
+
+valgrindmain: app
+	valgrind --leak-check=full ./$(APP_BIN) -s
 
 clean:
 	rm -rf $(OBJ_DIR) $(BIN_DIR)
