@@ -13,21 +13,38 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define MAX_BUFFER_SIZE 30000
+#define str(x) #x
+#define xstr(x) str(x)
 
+#define MAX_BUFFER_SIZE 30000
 #define MAX_HEADERS 50
 #define HTTPRESPONSE_CAPACITY 1024
 
 typedef enum
 {
-    VECTOR_SUCCESS       = 700,
-    VECTOR_ALLOC_ERROR   = -701,
-    VECTOR_INDEX_ERROR   = -702,
-    VECTOR_NULLPTR_ERROR = -703,
+    OK = 0,
 
-    SOCKET_BIND_ERROR   = -711,
-    SOCKET_LISTEN_ERROR = -712
+    SOCKET_BIND_ERROR   = -701,
+    SOCKET_LISTEN_ERROR = -702,
+
+    INVALID_REQUEST_LINE = -711,
+    INVALID_METHOD       = -712,
+    INVALID_PATH         = -713,
+    INVALID_HEADERS      = -714
 
 } ErrorCode;
+
+typedef enum
+{
+    GET,
+    POST,
+    PUT,
+    PATCH,
+    DELETE,
+    HEAD,
+    OPTIONS,
+    TRACE,
+    CONNECT
+} HTTPMethod;
 
 #endif // COMMON_H

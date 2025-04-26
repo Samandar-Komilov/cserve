@@ -10,9 +10,9 @@ OBJ_DIR = $(BUILD_DIR)/obj
 BIN_DIR = $(BUILD_DIR)/bin
 
 # Files
-APP_SRC = $(SRC_DIR)/main.c $(SRC_DIR)/server.c $(SRC_DIR)/http/server.c $(SRC_DIR)/http/request.c $(SRC_DIR)/http/response.c
-LIB_SRC = $(wildcard $(SRC_DIR)/DataStructures/*.c)    # dynamic array and other libs
-TEST_SRC = $(wildcard $(TEST_DIR)/*.c)                 # test files
+APP_SRC = $(wildcard $(SRC_DIR)/*.c) $(wildcard $(SRC_DIR)/sock/*.c) $(wildcard $(SRC_DIR)/http/*.c)
+LIB_SRC = $(wildcard $(SRC_DIR)/DataStructures/*.c)
+TEST_SRC = $(wildcard $(TEST_DIR)/*.c) $(wildcard $(SRC_DIR)/http/*.c) $(wildcard $(SRC_DIR)/sock/*.c)
 
 APP_OBJ = $(APP_SRC:.c=.o)
 LIB_OBJ = $(LIB_SRC:.c=.o)
@@ -32,7 +32,7 @@ test: $(TEST_BIN)
 # Application build
 $(APP_BIN): $(APP_SRC) $(LIB_SRC)
 	@mkdir -p $(BIN_DIR)
-	$(CC) $(CFLAGS) -o $@ $^ 
+	$(CC) $(CFLAGS) -I$(SRC_DIR) -o $@ $^ 
 
 # Test runner build
 $(TEST_BIN): $(TEST_SRC) $(LIB_SRC)

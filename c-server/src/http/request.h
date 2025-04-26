@@ -9,7 +9,7 @@
 #ifndef HTTPREQUEST_H
 #define HTTPREQUEST_H
 
-#include "../common.h"
+#include "common.h"
 
 typedef struct Header
 {
