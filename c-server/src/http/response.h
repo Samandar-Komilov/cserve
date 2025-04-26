@@ -9,7 +9,7 @@
 #ifndef HTTPRESPONSE_H
 #define HTTPRESPONSE_H
 
-#include "../common.h"
+#include "common.h"
 
 typedef struct
 {

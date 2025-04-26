@@ -6,7 +6,7 @@
  *
  */
 
-#include "../common.h"
+#include "common.h"
 #include "request.h"
 
 HTTPRequest *httprequest_constructor()

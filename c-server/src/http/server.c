@@ -7,8 +7,7 @@
  */
 
 #include "server.h"
-#include "request.h"
-#include "response.h"
+#include "parsers.h"
 
 /**
  * @brief   Launches the HTTP server, binding and listening on the port specified in
@@ -51,9 +50,9 @@ int launch(HTTPServer *self)
         read(new_socket, buffer, MAX_BUFFER_SIZE);
         printf("%s\n", buffer);
 
-        HTTPRequest *httprequest_ptr = self->parse_http_request(self, buffer);
+        HTTPRequest *httprequest_ptr = parse_http_request(buffer);
 
-        HTTPResponse *httpresponse_ptr = self->request_handler(httprequest_ptr);
+        HTTPResponse *httpresponse_ptr = request_handler(httprequest_ptr);
 
         char *response = httpresponse_serialize(httpresponse_ptr, NULL);
 
@@ -69,125 +68,6 @@ int launch(HTTPServer *self)
 
         close(new_socket);
     }
-}
-
-/**
- * @brief   Parse an HTTP request string into an HTTPRequest struct.
- *
- * @param   httpserver_ptr  The HTTPServer struct containing the methods to parse the request.
- * @param   request         The raw HTTP request string.
- *
- * @returns An HTTPRequest struct containing the parsed request information.
- *
- * This function takes an HTTP request string and breaks it into its components, storing them
- * in an HTTPRequest struct. The HTTPRequest struct is dynamically allocated and the caller
- * is responsible for freeing it.
- */
-HTTPRequest *parse_http_request(HTTPServer *httpserver_ptr, char *request)
-{
-    HTTPRequest *request_ptr = httprequest_constructor();
-
-    char *token = strtok(request, "\r\n");
-
-    // 1. Request Line
-    httpserver_ptr->parse_request_line(request_ptr, token);
-    token = strtok(NULL, "\r\n");
-
-    // 2. Headers
-    httpserver_ptr->parse_headers(request_ptr, token);
-    token = strtok(NULL, "\r\n");
-
-    // 3. Body
-    httpserver_ptr->parse_body(request_ptr, token, request_ptr->body_length);
-
-    return request_ptr;
-}
-
-/**
- * @brief   Parse the request line of an HTTP request and populate the request fields.
- * @param   req   The HTTP request to populate.
- * @param   line  The request line as a string.
- *
- * The request line is expected to be in the format:
- * <method> <path> <version>
- *
- * For example: GET / HTTP/1.1
- *
- * @note    The method, path, and version are expected to be separated by spaces.
- */
-void parse_request_line(HTTPRequest *req, char *line)
-{
-    char *method  = strtok(line, " ");
-    char *path    = strtok(NULL, " ");
-    char *version = strtok(NULL, " ");
-
-    req->method  = strdup(method);
-    req->path    = strdup(path);
-    req->version = strdup(version);
-}
-
-/**
- * @brief   Parse the headers of an HTTP request and populate the request fields.
- * @param   req       The HTTP request to populate.
- * @param   raw_headers  The raw headers as a string.
- *
- * The headers are expected to be in the format:
- * <header_name>: <value>
- *
- * For example: Content-Type: text/html
- *
- * @note    The header name and value are expected to be separated by a colon.
- */
-void parse_headers(HTTPRequest *req, char *raw_headers)
-{
-    char *line = strtok(raw_headers, "\r\n");
-    while (line && req->header_count < MAX_HEADERS)
-    {
-        char *colon = strchr(line, ':');
-        if (!colon) break;
-
-        // Header: value -> Header:\0value
-        // line = Header, value = colon + 1 = value
-        *colon      = '\0';
-        char *key   = line;
-        char *value = colon + 1;
-
-        // Trim spaces
-        while (*value == ' ')
-            value++;
-
-        req->headers[req->header_count].key   = strdup(key);
-        req->headers[req->header_count].value = strdup(value);
-        req->header_count++;
-
-        line = strtok(NULL, "\r\n");
-    }
-}
-
-/**
- * @brief   Parse the body of an HTTP request and populate the request fields.
- * @param   req           The HTTP request to populate.
- * @param   raw_body      The raw body as a string.
- * @param   content_length  The length of the body as specified in the Content-Length header.
- *
- * The body is expected to be in the request raw string after the headers.
- *
- * @note    The body is copied to a new memory location, and the original memory is not modified.
- */
-void parse_body(HTTPRequest *req, char *raw_body, int content_length)
-{
-    if (!raw_body || content_length == 0)
-    {
-        req->body        = NULL;
-        req->body_length = 0;
-        return;
-    }
-
-    req->body = malloc(content_length + 1);
-
-    memcpy(req->body, raw_body, content_length);
-    req->body[content_length] = '\0';
-    req->body_length          = content_length;
 }
 
 /**
@@ -220,6 +100,20 @@ HTTPResponse *request_handler(HTTPRequest *request_ptr)
     return response;
 }
 
+/**
+ * @brief   Constructor for the HTTPServer struct, setting up a server and HTTP
+ *          request handler.
+ *
+ * @param   port  The port number to listen on.
+ *
+ * @returns A pointer to the newly created HTTPServer struct.
+ *
+ * The HTTPServer struct contains a SocketServer struct, which is used to
+ * configure the server and handle incoming requests. The launch method is
+ * also set to launch, which is responsible for binding and listening on the
+ * configured port, and then entering an infinite loop to accept and process
+ * incoming requests.
+ */
 HTTPServer *httpserver_constructor(int port)
 {
     HTTPServer *httpserver_ptr = (HTTPServer *)malloc(sizeof(HTTPServer));
@@ -227,12 +121,7 @@ HTTPServer *httpserver_constructor(int port)
     SocketServer *SockServer = server_constructor(AF_INET, SOCK_STREAM, 0, INADDR_ANY, port, 10);
     httpserver_ptr->server   = SockServer;
 
-    httpserver_ptr->launch             = launch;
-    httpserver_ptr->parse_http_request = parse_http_request;
-    httpserver_ptr->parse_request_line = parse_request_line;
-    httpserver_ptr->parse_headers      = parse_headers;
-    httpserver_ptr->parse_body         = parse_body;
-    httpserver_ptr->request_handler    = request_handler;
+    httpserver_ptr->launch = launch;
 
     return httpserver_ptr;
 }
