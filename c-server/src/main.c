@@ -22,41 +22,30 @@ int main(void)
     signal(SIGTERM, handle_signal);
     signal(SIGSEGV, handle_signal);
 
-    // HTTPServer *httpserver_ptr = httpserver_constructor(8081);
-    // if (!httpserver_ptr)
-    // {
-    //     fprintf(stderr, "Failed to create HTTPServer instance.\n");
-    //     return EXIT_FAILURE;
-    // }
-
-    // int is_launched = httpserver_ptr->launch(httpserver_ptr);
-    // if (is_launched < 0)
-    // {
-    //     fprintf(stderr, "HTTPServer launch function faced an error, with code %d.\n",
-    //     is_launched); httpserver_destructor(httpserver_ptr); return EXIT_FAILURE;
-    // }
-
-    // httpserver_destructor(httpserver_ptr);
-    // HTTPRequest *req = httprequest_constructor();
-    // char line[]      = "INVALID_LINE";
-    // parse_request_line(req, line);
-    // return EXIT_SUCCESS;
-
     Config *cfg = parse_config("cserver.ini");
-
     if (!cfg)
     {
         perror("Failed to parse config file.\n");
         return EXIT_FAILURE;
     }
 
-    printf("Serving from: %s\n", cfg->static_dir);
-    printf("Port: %d\n", cfg->port);
-    for (size_t i = 0; i < cfg->backend_count; ++i)
+    HTTPServer *httpserver_ptr =
+        httpserver_constructor(cfg->port, cfg->static_dir, cfg->backends, cfg->backend_count);
+    if (!httpserver_ptr)
     {
-        printf("Backend %zu: %s\n", i, cfg->backends[i]);
+        fprintf(stderr, "Failed to create HTTPServer instance.\n");
+        return EXIT_FAILURE;
     }
 
+    int is_launched = httpserver_ptr->launch(httpserver_ptr);
+    if (is_launched < 0)
+    {
+        fprintf(stderr, "HTTPServer launch function faced an error, with code %d.\n", is_launched);
+        httpserver_destructor(httpserver_ptr);
+        return EXIT_FAILURE;
+    }
+
+    httpserver_destructor(httpserver_ptr);
     free_config(cfg);
 
     return EXIT_SUCCESS;
@@ -87,3 +76,5 @@ void handle_signal(int sig)
 
     exit(EXIT_FAILURE); // Non-zero to indicate abnormal termination
 }
+
+void init_config(void) {}

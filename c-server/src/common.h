@@ -22,6 +22,7 @@
 #define HTTPRESPONSE_CAPACITY 1024
 
 #define DEFAULT_CONFIG_PATH "/home/voidp/Projects/samandar/1lang1server/cserver"
+#define BASE_DIR "./"
 
 typedef enum
 {
