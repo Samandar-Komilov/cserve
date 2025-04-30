@@ -12,6 +12,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <linux/limits.h>
+#include <limits.h>
+#include <errno.h>
 
 #define str(x) #x
 #define xstr(x) str(x)

@@ -7,7 +7,6 @@
  */
 
 #include "server.h"
-#include "parsers.h"
 
 /**
  * @brief   Launches the HTTP server, binding and listening on the port specified in
@@ -71,43 +70,81 @@ int launch(HTTPServer *self)
 }
 
 /**
- * @brief   Handle an HTTP request and generate an HTTP response.
+ * @brief   HTTP request handler.
  *
- * @param   request_ptr  A pointer to the HTTPRequest struct containing the request details.
+ * This function takes an HTTPRequest struct as argument and returns an
+ * HTTPResponse struct. It handles the request by looking at the path and
+ * deciding what to do with it:
  *
- * @returns A pointer to an HTTPResponse struct representing the generated response.
+ * - If the path is /static, it serves the file at the given path.
+ * - If the path is /api, it calls the reverse proxy handler.
+ * - Otherwise, it returns a 404 Not Found response.
  *
- * This function processes the incoming HTTP request, prints the request path for logging,
- * and constructs a basic HTTP response with a status code of 200, HTTP version 1.1,
- * and a "Hello, World!" body. The caller is responsible for freeing the memory allocated
- * for the HTTPResponse.
+ * @example
+ * HTTPRequest request = { .path = "/static/index.html" };
+ * HTTPResponse *response = request_handler(&request);
+ * // response is an HTTPResponse struct with status code 200, body containing the file contents
+ * // and other fields populated accordingly.
+ *
+ * @param   request_ptr  The HTTPRequest struct to handle.
+ *
+ * @returns A pointer to an HTTPResponse struct containing the response to the
+ *          request.
  */
 HTTPResponse *request_handler(HTTPRequest *request_ptr)
 {
-    // 1. HTML response
-    // char *path  = strdup(request_ptr->path);
-    // char *token = NULL;
-    // while (1)
-    // {
-    //     token = strtok(path, "/");
-    //     if (token == NULL) break;
-    //     printf("%s\n", token);
-    // }
+    char *path  = strdup(request_ptr->path);
+    char *token = strtok(path, "/");
 
-    printf("%s\n", request_ptr->path);
+    if (token)
+    {
+        if (strcmp(token, "static") == 0)
+        {
+            char filepath[PATH_MAX];
+            if (snprintf(filepath, sizeof(filepath), "%s/%s", realpath(BASE_DIR, NULL),
+                         request_ptr->path) < 0)
+            {
+                HTTPResponse *response =
+                    response_builder(404, "Not Found", "<h1>snprintf() error</h1>");
+                return response;
+            };
+            if (access(filepath, R_OK) != 0)
+            {
+                HTTPResponse *response =
+                    response_builder(403, "Forbidden", "<h1>403 Forbidden</h1>");
+                return response;
+            }
 
-    // 2. Reverse proxy
+            int fd = open(filepath, O_RDONLY);
+            if (fd == -1)
+            {
+                HTTPResponse *response =
+                    response_builder(404, "Not Found", "<h1>404 Not Found</h1>");
+                return response;
+            }
 
-    // Ownership of returned HTTPResponse* is transferred to caller
-    // The caller is responsible for freeing the memory
-    HTTPResponse *response = httpresponse_constructor();
+            char buffer[MAX_BUFFER_SIZE];
+            read(fd, buffer, sizeof(buffer));
 
-    response->status_code   = 200;
-    response->version       = strdup("HTTP/1.1");
-    response->reason_phrase = strdup("OK");
-    response->body          = strdup("Hello, World!");
-    response->body_length   = strlen(response->body);
+            HTTPResponse *response = response_builder(200, "OK", buffer);
 
+            close(fd);
+            return response;
+        }
+        else if (strcmp(token, "api") == 0)
+        {
+            // TODO: Reverse proxy
+            HTTPResponse *response = response_builder(200, "OK", "<h1>200 OK</h1>");
+            return response;
+        }
+        else
+        {
+            HTTPResponse *response = response_builder(404, "Not Found", "<h1>404 Not Found</h1>");
+            return response;
+        }
+    }
+
+    HTTPResponse *response = response_builder(404, "Not Found", "<h1>404 Not Found</h1>");
     return response;
 }
 

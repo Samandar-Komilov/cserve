@@ -107,3 +107,16 @@ char *httpresponse_serialize(HTTPResponse *res, size_t *out_len)
     if (out_len) *out_len = len;
     return buffer;
 }
+
+HTTPResponse *response_builder(int status_code, char *phrase, char *body)
+{
+    HTTPResponse *response = httpresponse_constructor();
+
+    response->status_code   = status_code;
+    response->version       = strdup("HTTP/1.1");
+    response->reason_phrase = strdup(phrase);
+    response->body          = strdup(body);
+    response->body_length   = strlen(response->body);
+
+    return response;
+}

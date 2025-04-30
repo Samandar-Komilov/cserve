@@ -1,6 +1,6 @@
 ### CSERVER configuration file ###
 
-port=8080
+port=8081
 root=./
 static_dir=./static
 backend=localhost:8000

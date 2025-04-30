@@ -11,6 +11,7 @@
 
 #include "sock/server.h"
 #include "parsers.h"
+#include "common.h"
 
 typedef struct HTTPServer
 {

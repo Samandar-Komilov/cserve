@@ -59,13 +59,15 @@ void handle_signal(int sig)
         fprintf(stderr, "\n\033[31m[!] SIGINT received. Cleaning up...\033[0m\n");
         break;
     case SIGSEGV:
-        fprintf(stderr, "\n\033[31m[!] SIGSEGV received. Possible segmentation fault.\033[0m\n");
+        fprintf(
+            stderr,
+            "\n\033[31m[!] SIGSEGV received. Possible segmentation fault. Cleaning up...\033[0m\n");
         break;
     case SIGTERM:
         fprintf(stderr, "\n\033[31m[!] SIGTERM received. Terminating gracefully...\033[0m\n");
         break;
     default:
-        fprintf(stderr, "\n\03[33m[!] Signal %d received.\033[0m\n", sig);
+        fprintf(stderr, "\n\03[33m[!] Signal %d received. Cleaning up...\033[0m\n", sig);
     }
 
     if (httpserver_ptr)
