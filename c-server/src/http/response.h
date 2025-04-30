@@ -28,4 +28,6 @@ void httpresponse_free(HTTPResponse *httpresponse_ptr);
 int httpresponse_add_header(HTTPResponse *res, const char *key, const char *value);
 char *httpresponse_serialize(HTTPResponse *res, size_t *out_len);
 
+HTTPResponse *response_builder(int status_code, char *phrase, char *body);
+
 #endif

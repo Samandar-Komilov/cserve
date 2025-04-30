@@ -33,6 +33,14 @@ SocketServer *server_constructor(int domain, int service, int protocol, uint32_t
         exit(1);
     }
 
+    int opt = 1;
+    if (setsockopt(server_ptr->socket, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0)
+    {
+        perror("setsockopt(SO_REUSEADDR) failed");
+        close(server_ptr->socket);
+        exit(1);
+    }
+
     return server_ptr;
 }
 
