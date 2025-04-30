@@ -84,8 +84,19 @@ int launch(HTTPServer *self)
  */
 HTTPResponse *request_handler(HTTPRequest *request_ptr)
 {
-    // Simulate request processing (HTML response or proxy)
-    printf(">>> Processing the request...: %s\n", request_ptr->path);
+    // 1. HTML response
+    // char *path  = strdup(request_ptr->path);
+    // char *token = NULL;
+    // while (1)
+    // {
+    //     token = strtok(path, "/");
+    //     if (token == NULL) break;
+    //     printf("%s\n", token);
+    // }
+
+    printf("%s\n", request_ptr->path);
+
+    // 2. Reverse proxy
 
     // Ownership of returned HTTPResponse* is transferred to caller
     // The caller is responsible for freeing the memory
@@ -114,14 +125,17 @@ HTTPResponse *request_handler(HTTPRequest *request_ptr)
  * configured port, and then entering an infinite loop to accept and process
  * incoming requests.
  */
-HTTPServer *httpserver_constructor(int port)
+HTTPServer *httpserver_constructor(int port, char *static_dir, char **proxy_backends,
+                                   int backend_count)
 {
     HTTPServer *httpserver_ptr = (HTTPServer *)malloc(sizeof(HTTPServer));
 
-    SocketServer *SockServer = server_constructor(AF_INET, SOCK_STREAM, 0, INADDR_ANY, port, 10);
-    httpserver_ptr->server   = SockServer;
-
-    httpserver_ptr->launch = launch;
+    SocketServer *SockServer   = server_constructor(AF_INET, SOCK_STREAM, 0, INADDR_ANY, port, 10);
+    httpserver_ptr->server     = SockServer;
+    httpserver_ptr->static_dir = strdup(static_dir);
+    httpserver_ptr->proxy_backends = proxy_backends;
+    httpserver_ptr->backend_count  = backend_count;
+    httpserver_ptr->launch         = launch;
 
     return httpserver_ptr;
 }
@@ -132,6 +146,5 @@ void httpserver_destructor(HTTPServer *httpserver_ptr)
     {
         server_destructor(httpserver_ptr->server);
     }
-
     free(httpserver_ptr);
 }

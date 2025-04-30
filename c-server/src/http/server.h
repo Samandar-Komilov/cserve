@@ -16,11 +16,16 @@ typedef struct HTTPServer
 {
     SocketServer *server;
 
+    char *static_dir;
+    char **proxy_backends;
+    int backend_count;
+
     int (*launch)(struct HTTPServer *self);
 } HTTPServer;
 
 HTTPResponse *request_handler(HTTPRequest *request_ptr);
-HTTPServer *httpserver_constructor(int port);
+HTTPServer *httpserver_constructor(int port, char *static_dir, char **proxy_backends,
+                                   int backend_count);
 void httpserver_destructor(HTTPServer *httpserver_ptr);
 
 #endif

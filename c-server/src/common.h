@@ -16,9 +16,13 @@
 #define str(x) #x
 #define xstr(x) str(x)
 
-#define MAX_BUFFER_SIZE 30000
+#define MAX_BUFFER_SIZE 8192 // 8 KB
 #define MAX_HEADERS 50
+#define MAX_BACKENDS 16
 #define HTTPRESPONSE_CAPACITY 1024
+
+#define DEFAULT_CONFIG_PATH "/home/voidp/Projects/samandar/1lang1server/cserver"
+#define BASE_DIR "./"
 
 typedef enum
 {
