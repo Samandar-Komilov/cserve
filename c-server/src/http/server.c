@@ -84,8 +84,17 @@ int launch(HTTPServer *self)
  */
 HTTPResponse *request_handler(HTTPRequest *request_ptr)
 {
-    // Simulate request processing (HTML response or proxy)
-    printf(">>> Processing the request...: %s\n", request_ptr->path);
+    // 1. HTML response
+    char *path  = strdup(request_ptr->path);
+    char *token = NULL;
+    while (1)
+    {
+        token = strtok(path, "/");
+        if (token == NULL) break;
+        printf("%s\n", token);
+    }
+
+    // 2. Reverse proxy
 
     // Ownership of returned HTTPResponse* is transferred to caller
     // The caller is responsible for freeing the memory
@@ -120,6 +129,8 @@ HTTPServer *httpserver_constructor(int port)
 
     SocketServer *SockServer = server_constructor(AF_INET, SOCK_STREAM, 0, INADDR_ANY, port, 10);
     httpserver_ptr->server   = SockServer;
+
+    httpserver_ptr->static_dir = "/static";
 
     httpserver_ptr->launch = launch;
 

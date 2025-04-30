@@ -9,6 +9,7 @@
 #include <unistd.h>
 #include <signal.h>
 #include "common.h"
+#include "configs/config.h"
 #include "http/server.h"
 
 void handle_signal(int sig);
@@ -36,9 +37,28 @@ int main(void)
     // }
 
     // httpserver_destructor(httpserver_ptr);
-    HTTPRequest *req = httprequest_constructor();
-    char line[]      = "INVALID_LINE";
-    parse_request_line(req, line);
+    // HTTPRequest *req = httprequest_constructor();
+    // char line[]      = "INVALID_LINE";
+    // parse_request_line(req, line);
+    // return EXIT_SUCCESS;
+
+    Config *cfg = parse_config("cserver.ini");
+
+    if (!cfg)
+    {
+        perror("Failed to parse config file.\n");
+        return EXIT_FAILURE;
+    }
+
+    printf("Serving from: %s\n", cfg->static_dir);
+    printf("Port: %d\n", cfg->port);
+    for (size_t i = 0; i < cfg->backend_count; ++i)
+    {
+        printf("Backend %zu: %s\n", i, cfg->backends[i]);
+    }
+
+    free_config(cfg);
+
     return EXIT_SUCCESS;
 }
 

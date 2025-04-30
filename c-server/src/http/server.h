@@ -16,6 +16,8 @@ typedef struct HTTPServer
 {
     SocketServer *server;
 
+    char *static_dir;
+
     int (*launch)(struct HTTPServer *self);
 } HTTPServer;
 
