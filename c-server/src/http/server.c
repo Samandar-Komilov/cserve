@@ -134,7 +134,58 @@ HTTPResponse *request_handler(HTTPRequest *request_ptr)
         else if (strcmp(token, "api") == 0)
         {
             // TODO: Reverse proxy
-            HTTPResponse *response = response_builder(200, "OK", "<h1>200 OK</h1>");
+            char *api_path = request_ptr->path + strlen("/api");
+            if (*api_path == '\0') api_path = "/";
+
+            char proxy_request[MAX_BUFFER_SIZE];
+            int proxy_request_len =
+                snprintf(proxy_request, sizeof(proxy_request),
+                         "%s %s HTTP/1.1\r\n"
+                         "Host: localhost\r\n"
+                         "Content-Length: %zu\r\n"
+                         "Connection: close\r\n"
+                         "\r\n",
+                         request_ptr->method, api_path, request_ptr->body_length);
+
+            if (proxy_request_len < 0)
+            {
+                return response_builder(500, "Internal Server Error",
+                                        "<h1>proxy snprintf() error</h1>");
+            }
+
+            // Then, append the request body to the proxy_request string
+            strncat(proxy_request, request_ptr->body, request_ptr->body_length);
+
+            int backend_fd = connect_to_backend("localhost", "8000");
+            if (backend_fd == -1)
+            {
+                return response_builder(502, "Bad Gateway",
+                                        "<h1>502 Bad Gateway: Backend Unavailable</h1>");
+            }
+
+            send(backend_fd, proxy_request, proxy_request_len, 0);
+
+            // Receive response from backend
+            char proxy_response[MAX_BUFFER_SIZE];
+            int proxy_response_len = recv(backend_fd, proxy_response, sizeof(proxy_response), 0);
+
+            if (proxy_response_len < 0)
+            {
+                return response_builder(502, "Bad Gateway",
+                                        "<h1>502 Bad Gateway: Failed to Read from Backend</h1>");
+            }
+
+            proxy_response[proxy_response_len] = '\0';
+            close(backend_fd);
+
+            // TODO: parse response headers, here we directly return body
+            char *body = strstr(proxy_response, "\r\n\r\n");
+            if (!body)
+                body = proxy_response;
+            else
+                body += 4;
+
+            HTTPResponse *response = response_builder(200, "OK", body);
             return response;
         }
         else
@@ -146,6 +197,46 @@ HTTPResponse *request_handler(HTTPRequest *request_ptr)
 
     HTTPResponse *response = response_builder(404, "Not Found", "<h1>404 Not Found</h1>");
     return response;
+}
+
+/**
+ * @brief   Connect to a backend server using the given host and port.
+ *
+ * @param   host  The hostname or IP address of the backend server.
+ * @param   port  The port number of the backend server.
+ *
+ * @returns A file descriptor for the connected socket, or -1 on failure.
+ *
+ * This function takes care of resolving the hostname to an address and
+ * connecting to the specified port.
+ *
+ * The caller is responsible for closing the socket when finished.
+ */
+int connect_to_backend(const char *host, const char *port)
+{
+    struct addrinfo hints, *res;
+    memset(&hints, 0, sizeof(hints));
+
+    hints.ai_family   = AF_INET;
+    hints.ai_socktype = SOCK_STREAM;
+
+    if (getaddrinfo(host, port, &hints, &res) != 0) return -1;
+
+    int sock = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
+    if (sock < 0)
+    {
+        freeaddrinfo(res);
+        return -1;
+    }
+
+    if (connect(sock, res->ai_addr, res->ai_addrlen) != 0)
+    {
+        freeaddrinfo(res);
+        return -1;
+    }
+
+    freeaddrinfo(res);
+    return sock;
 }
 
 /**

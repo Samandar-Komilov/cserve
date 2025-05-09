@@ -20,6 +20,7 @@
 #include <linux/limits.h>
 #include <limits.h>
 #include <errno.h>
+#include <netdb.h>
 
 #define str(x) #x
 #define xstr(x) str(x)

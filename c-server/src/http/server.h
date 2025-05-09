@@ -25,6 +25,8 @@ typedef struct HTTPServer
 } HTTPServer;
 
 HTTPResponse *request_handler(HTTPRequest *request_ptr);
+int connect_to_backend(const char *host, const char *port);
+
 HTTPServer *httpserver_constructor(int port, char *static_dir, char **proxy_backends,
                                    int backend_count);
 void httpserver_destructor(HTTPServer *httpserver_ptr);
