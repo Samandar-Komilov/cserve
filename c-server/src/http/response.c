@@ -20,6 +20,7 @@ HTTPResponse *httpresponse_constructor()
     res->header_count  = 0;
     res->body          = NULL;
     res->body_length   = 0;
+    res->content_type  = NULL;
 
     return res;
 }
@@ -38,6 +39,7 @@ void httpresponse_free(HTTPResponse *res)
     free(res->headers);
 
     free(res->body);
+    free(res->content_type);
     free(res);
 }
 
@@ -108,15 +110,27 @@ char *httpresponse_serialize(HTTPResponse *res, size_t *out_len)
     return buffer;
 }
 
-HTTPResponse *response_builder(int status_code, char *phrase, char *body)
+HTTPResponse *response_builder(int status_code, const char *phrase, const char *body,
+                               size_t body_length, const char *content_type)
 {
     HTTPResponse *response = httpresponse_constructor();
+
+    // Ownership moves: caller frees memory
+    response->body = (char *)malloc(body_length);
+    if (!response->body)
+    {
+        httpresponse_free(response);
+        return NULL;
+    }
+
+    memset(response->body, 0, body_length);
 
     response->status_code   = status_code;
     response->version       = strdup("HTTP/1.1");
     response->reason_phrase = strdup(phrase);
-    response->body          = strdup(body);
-    response->body_length   = strlen(response->body);
+    memcpy(response->body, body, body_length);
+    response->body_length  = body_length;
+    response->content_type = strdup(content_type);
 
     return response;
 }

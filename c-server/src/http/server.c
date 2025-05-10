@@ -46,7 +46,7 @@ int launch(HTTPServer *self)
         int address_length = sizeof(self->server->address);
         int new_socket     = accept(self->server->socket, (struct sockaddr *)&self->server->address,
                                     (socklen_t *)&address_length);
-        read(new_socket, buffer, MAX_BUFFER_SIZE);
+        recv(new_socket, buffer, MAX_BUFFER_SIZE, 0);
         printf("%s\n", buffer);
 
         HTTPRequest *httprequest_ptr = parse_http_request(buffer);
@@ -60,7 +60,7 @@ int launch(HTTPServer *self)
 
         printf("===== Response:\n%s", response);
 
-        write(new_socket, response, strlen(response));
+        send(new_socket, response, strlen(response), 0);
 
         // Caller owned malloced buffer, so frees it now
         free(response);
@@ -101,32 +101,59 @@ HTTPResponse *request_handler(HTTPRequest *request_ptr)
         if (strcmp(token, "static") == 0)
         {
             char filepath[PATH_MAX];
-            if (snprintf(filepath, sizeof(filepath), "%s/%s", realpath(BASE_DIR, NULL),
+            if (snprintf(filepath, sizeof(filepath), "%s%s", realpath(BASE_DIR, NULL),
                          request_ptr->path) < 0)
             {
-                HTTPResponse *response =
-                    response_builder(404, "Not Found", "<h1>snprintf() error</h1>");
+                char response_buffer[] = "<h1>snprintf() error</h1>";
+                HTTPResponse *response = response_builder(404, "Not Found", response_buffer,
+                                                          sizeof(response_buffer), "text/html");
                 return response;
             };
+
+            // printf("[LOG] %s %s %s\n", filepath, token, path);
+
             if (access(filepath, R_OK) != 0)
             {
-                HTTPResponse *response =
-                    response_builder(403, "Forbidden", "<h1>403 Forbidden</h1>");
+                char response_buffer[] = "<h1>snprintf() error</h1>";
+                HTTPResponse *response = response_builder(403, "Forbidden", response_buffer,
+                                                          sizeof(response_buffer), "text/html");
                 return response;
             }
 
             int fd = open(filepath, O_RDONLY);
             if (fd == -1)
             {
-                HTTPResponse *response =
-                    response_builder(404, "Not Found", "<h1>404 Not Found</h1>");
+                char response_buffer[] = "<h1>snprintf() error</h1>";
+                HTTPResponse *response = response_builder(404, "Not Found", response_buffer,
+                                                          sizeof(response_buffer), "text/html");
                 return response;
             }
 
-            char buffer[MAX_BUFFER_SIZE];
-            read(fd, buffer, sizeof(buffer));
+            // Get file size
+            struct stat st;
+            fstat(fd, &st);
+            size_t filesize = st.st_size;
 
-            HTTPResponse *response = response_builder(200, "OK", buffer);
+            char *buffer = malloc(filesize);
+            if (!buffer)
+            {
+                close(fd);
+                char response_buffer[] = "<h1>Memory alloc failed</h1>";
+                return response_builder(500, "Internal Server Error", response_buffer,
+                                        sizeof(response_buffer), "text/html");
+            }
+            size_t bytes_read = read(fd, buffer, sizeof(buffer));
+            printf("Read %zu bytes\nActual filesize: %zu\n", bytes_read, filesize);
+            if (bytes_read != filesize)
+            {
+                free(buffer);
+                char response_buffer[] = "<h1>Failed to read file</h1>";
+                return response_builder(500, "Internal Server Error", response_buffer,
+                                        sizeof(response_buffer), "text/html");
+            }
+
+            HTTPResponse *response =
+                response_builder(200, "OK", buffer, filesize, get_mime_type(filepath));
 
             close(fd);
             return response;
@@ -149,8 +176,9 @@ HTTPResponse *request_handler(HTTPRequest *request_ptr)
 
             if (proxy_request_len < 0)
             {
-                return response_builder(500, "Internal Server Error",
-                                        "<h1>proxy snprintf() error</h1>");
+                char response_buffer[] = "<h1>snprintf() error</h1>";
+                return response_builder(500, "Internal Server Error", response_buffer,
+                                        sizeof(response_buffer), "text/html");
             }
 
             // Then, append the request body to the proxy_request string
@@ -159,8 +187,9 @@ HTTPResponse *request_handler(HTTPRequest *request_ptr)
             int backend_fd = connect_to_backend("localhost", "8000");
             if (backend_fd == -1)
             {
-                return response_builder(502, "Bad Gateway",
-                                        "<h1>502 Bad Gateway: Backend Unavailable</h1>");
+                char response_buffer[] = "<h1>Failed to connect to backend</h1>";
+                return response_builder(502, "Bad Gateway", response_buffer,
+                                        sizeof(response_buffer), "text/html");
             }
 
             send(backend_fd, proxy_request, proxy_request_len, 0);
@@ -171,8 +200,9 @@ HTTPResponse *request_handler(HTTPRequest *request_ptr)
 
             if (proxy_response_len < 0)
             {
-                return response_builder(502, "Bad Gateway",
-                                        "<h1>502 Bad Gateway: Failed to Read from Backend</h1>");
+                char response_buffer[] = "<h1>Failed to read from backend</h1>";
+                return response_builder(502, "Bad Gateway", response_buffer,
+                                        sizeof(response_buffer), "text/html");
             }
 
             proxy_response[proxy_response_len] = '\0';
@@ -185,17 +215,22 @@ HTTPResponse *request_handler(HTTPRequest *request_ptr)
             else
                 body += 4;
 
-            HTTPResponse *response = response_builder(200, "OK", body);
+            HTTPResponse *response =
+                response_builder(200, "OK", body, proxy_request_len, "text/html");
             return response;
         }
         else
         {
-            HTTPResponse *response = response_builder(404, "Not Found", "<h1>404 Not Found</h1>");
+            char response_buffer[] = "<h1>404 Not Found</h1>";
+            HTTPResponse *response = response_builder(404, "Not Found", response_buffer,
+                                                      sizeof(response_buffer), "text/html");
             return response;
         }
     }
 
-    HTTPResponse *response = response_builder(404, "Not Found", "<h1>404 Not Found</h1>");
+    char response_buffer[] = "<h1>404 Not Found</h1>";
+    HTTPResponse *response =
+        response_builder(404, "Not Found", response_buffer, sizeof(response_buffer), "text/html");
     return response;
 }
 
