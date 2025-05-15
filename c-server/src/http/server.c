@@ -52,6 +52,8 @@ int launch(HTTPServer *self)
     ev.data.fd = self->server->socket;
     if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, self->server->socket, &ev) == -1)
     {
+        close(epoll_fd);
+        close(self->server->socket);
         perror("[ERROR] Failed to add server socket to epoll event loop.");
         exit(1);
     }
@@ -63,7 +65,7 @@ int launch(HTTPServer *self)
         char buff[MAX_BUFFER_SIZE];
         int address_length = sizeof(self->server->address);
 
-        int n_ready = epoll_wait(epoll_fd, events, MAX_EPOLL_EVENTS, -1);
+        int n_ready = epoll_wait(epoll_fd, events, MAX_EPOLL_EVENTS, 60);
         if (n_ready == -1)
         {
             perror("[ERROR] Failed to wait for epoll events.");
@@ -81,6 +83,7 @@ int launch(HTTPServer *self)
                 if (client_fd == -1)
                 {
                     perror("[ERROR] Error while accepting a new connection");
+                    close(client_fd);
                     continue;
                 }
 
@@ -89,11 +92,13 @@ int launch(HTTPServer *self)
                 if (flags == -1) return -1;
                 fcntl(client_fd, F_SETFL, flags | O_NONBLOCK);
 
-                ev.events  = EPOLLIN | EPOLLOUT;
+                ev.events  = EPOLLIN;
                 ev.data.fd = client_fd;
                 if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, client_fd, &ev) == -1)
                 {
                     perror("[ERROR] Error while responding to the client socket: ");
+                    epoll_ctl(epoll_fd, EPOLL_CTL_DEL, events[i].data.fd, NULL);
+                    close(events[i].data.fd);
                     continue;
                 }
 
@@ -106,51 +111,78 @@ int launch(HTTPServer *self)
             else
             {
                 // Read from client socket and handle accordingly
-                int bytes_read = recv(events[i].data.fd, buff, MAX_BUFFER_SIZE, 0);
-                if (bytes_read <= 0)
+                int client_fd  = events[i].data.fd;
+                int total_read = 0;
+                while (1)
                 {
-                    if (errno == EAGAIN || errno == EWOULDBLOCK)
+                    int bytes_read =
+                        recv(client_fd, buff + total_read, MAX_BUFFER_SIZE - total_read, 0);
+                    if (bytes_read < 0)
                     {
-                        // Nothing to read now — try again later
-                        continue;
-                    }
-                    if (bytes_read < 0) perror("[ERROR] Error while reading from client socket: ");
-                    close(events[i].data.fd);
-                    printf("[INFO] Connection closed.\n");
-                }
-                else
-                {
-                    printf("[INFO] Received: %s\nBytes read: %d\n", buff, bytes_read);
-                    HTTPRequest *httprequest_ptr   = parse_http_request(buff);
-                    HTTPResponse *httpresponse_ptr = request_handler(httprequest_ptr);
-
-                    char *response   = httpresponse_serialize(httpresponse_ptr, NULL);
-                    int response_len = strlen(response);
-
-                    // caller of the request_handler is responsible for freeing the memory
-                    httpresponse_free(httpresponse_ptr);
-
-                    printf("===== Response:\n%s\n\n", response);
-
-                    int total_sent = 0;
-                    while (total_sent < response_len)
-                    {
-                        int bytes_sent = send(events[i].data.fd, response + total_sent,
-                                              response_len - total_sent, 0);
-                        if (bytes_sent <= 0)
+                        if (errno == EAGAIN || errno == EWOULDBLOCK)
                         {
-                            perror("[ERROR] Error while sending response to client socket: ");
+                            // All data read
                             break;
                         }
-                        total_sent += bytes_sent;
+                        else
+                        {
+                            epoll_ctl(epoll_fd, EPOLL_CTL_DEL, client_fd, NULL);
+                            close(client_fd);
+                            perror("[ERROR] recv()");
+                            break;
+                        }
                     }
-
-                    // Caller owned malloced buffer, so frees it now
-                    free(response);
+                    else if (bytes_read == 0)
+                    {
+                        // Client closed connection
+                        epoll_ctl(epoll_fd, EPOLL_CTL_DEL, client_fd, NULL);
+                        close(client_fd);
+                        perror("[INFO] Client disconnected.\n");
+                        break;
+                    }
+                    else
+                    {
+                        total_read += bytes_read;
+                        if (total_read >= MAX_BUFFER_SIZE) break;
+                    }
                 }
+                buff[total_read] = '\0';
+
+                printf("[INFO] Received: %s\nBytes read: %d\n", buff, total_read);
+                HTTPRequest *httprequest_ptr   = parse_http_request(buff);
+                HTTPResponse *httpresponse_ptr = request_handler(httprequest_ptr);
+
+                char *response   = httpresponse_serialize(httpresponse_ptr, NULL);
+                int response_len = strlen(response);
+
+                // caller of the request_handler is responsible for freeing the memory
+                httpresponse_free(httpresponse_ptr);
+
+                printf("===== Response:\n%s\n\n", response);
+
+                int total_sent = 0;
+                while (total_sent < response_len)
+                {
+                    int bytes_sent = send(events[i].data.fd, response + total_sent,
+                                          response_len - total_sent, 0);
+                    if (bytes_sent <= 0)
+                    {
+                        perror("[ERROR] Error while sending response to client socket: ");
+                        break;
+                    }
+                    total_sent += bytes_sent;
+                }
+
+                printf("[INFO] Response sent: %d\n", total_sent);
+
+                // Caller owned malloced buffer, so frees it now
+                free(response);
             }
         }
     }
+
+    close(epoll_fd);
+    return 0;
 }
 
 /**
@@ -177,6 +209,9 @@ int launch(HTTPServer *self)
  */
 HTTPResponse *request_handler(HTTPRequest *request_ptr)
 {
+    // TODO: prevent segfault - check before strdup()
+    if (request_ptr == NULL) return NULL;
+    if (request_ptr->path == NULL) return NULL;
     char *path  = strdup(request_ptr->path);
     char *token = strtok(path, "/");
 
