@@ -8,35 +8,64 @@
 
 #include "parsers.h"
 
-/**
- * @brief   Parse an HTTP request string into an HTTPRequest struct.
- *
- * @param   request         The raw HTTP request string.
- *
- * @returns An HTTPRequest struct containing the parsed request information.
- *
- * This function takes an HTTP request string and breaks it into its components, storing them
- * in an HTTPRequest struct. The HTTPRequest struct is dynamically allocated and the caller
- * is responsible for freeing it.
- */
+char *find_line_end(char *start)
+{
+    char *end = strstr(start, "\r\n");
+    if (end)
+    {
+        *end = '\0';    // Null-terminate the line
+        return end + 2; // Return pointer to start of next line
+    }
+    return NULL;
+}
+
 HTTPRequest *parse_http_request(char *request_str)
 {
-    HTTPRequest *request_ptr = httprequest_constructor();
+    if (!request_str) return NULL;
+    HTTPRequest *req = httprequest_constructor();
+    char *cursor     = request_str;
 
-    char *token = strtok(request_str, "\r\n");
+    // 1. Parse request line
+    char *next = find_line_end(cursor);
+    if (!next || parse_request_line(req, cursor) != OK)
+    {
+        httprequest_free(req);
+        return NULL;
+    }
+    cursor = next;
 
-    // 1. Request Line
-    parse_request_line(request_ptr, token);
-    token = strtok(NULL, "\r\n");
+    // 2. Parse headers (loop until empty line)
+    while (*cursor != '\0' && !(cursor[0] == '\r' && cursor[1] == '\n'))
+    {
+        next = find_line_end(cursor);
+        if (!next)
+        {
+            httprequest_free(req);
+            return NULL;
+        }
+        if (strlen(cursor) == 0) break; // empty line
+        if (parse_single_header_line(req, cursor) != OK)
+        {
+            httprequest_free(req);
+            return NULL;
+        }
+        cursor = next;
+    }
 
-    // 2. Headers
-    parse_headers(request_ptr, token);
-    token = strtok(NULL, "\r\n");
+    // Skip the final \r\n
+    if (strncmp(cursor, "\r\n", 2) == 0) cursor += 2;
 
-    // 3. Body
-    parse_body(request_ptr, token, request_ptr->body_length);
+    // 3. Parse body (if any)
+    if (*cursor != '\0')
+    {
+        if (parse_body(req, cursor, req->body_length) != OK)
+        {
+            httprequest_free(req);
+            return NULL;
+        }
+    }
 
-    return request_ptr;
+    return req;
 }
 
 /**
@@ -60,6 +89,7 @@ HTTPRequest *parse_http_request(char *request_str)
  */
 int parse_request_line(HTTPRequest *req, char *line)
 {
+    if (!line || !req) return INVALID_REQUEST_LINE;
     char *method  = strtok(line, " ");
     char *path    = strtok(NULL, " ");
     char *version = strtok(NULL, " ");
@@ -104,8 +134,10 @@ int parse_request_line(HTTPRequest *req, char *line)
  *
  * @note    The header name and value are expected to be separated by a colon.
  */
-void parse_headers(HTTPRequest *req, char *raw_headers)
+int parse_headers(HTTPRequest *req, char *raw_headers)
 {
+    if (!req || !raw_headers) return INVALID_HEADERS;
+
     char *line = strtok(raw_headers, "\r\n");
     while (line && req->header_count < MAX_HEADERS)
     {
@@ -128,6 +160,8 @@ void parse_headers(HTTPRequest *req, char *raw_headers)
 
         line = strtok(NULL, "\r\n");
     }
+
+    return OK;
 }
 
 /**
@@ -140,13 +174,14 @@ void parse_headers(HTTPRequest *req, char *raw_headers)
  *
  * @note    The body is copied to a new memory location, and the original memory is not modified.
  */
-void parse_body(HTTPRequest *req, char *raw_body, int content_length)
+int parse_body(HTTPRequest *req, char *raw_body, int content_length)
 {
+    if (!req) return INVALID_REQUEST_BODY;
     if (!raw_body || content_length == 0)
     {
         req->body        = NULL;
         req->body_length = 0;
-        return;
+        return INVALID_REQUEST_BODY;
     }
 
     req->body = malloc(content_length + 1);
@@ -154,6 +189,8 @@ void parse_body(HTTPRequest *req, char *raw_body, int content_length)
     memcpy(req->body, raw_body, content_length);
     req->body[content_length] = '\0';
     req->body_length          = content_length;
+
+    return OK;
 }
 
 const char *get_mime_type(const char *filepath)

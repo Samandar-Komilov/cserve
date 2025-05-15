@@ -17,10 +17,11 @@ HTTPResponse *httpresponse_constructor()
     res->version       = NULL;
     res->reason_phrase = NULL;
     res->headers       = NULL;
-    res->header_count  = 0;
     res->body          = NULL;
-    res->body_length   = 0;
     res->content_type  = NULL;
+    res->header_count  = 0;
+    res->body_length   = 0;
+    res->content_length = 0;
 
     return res;
 }
@@ -67,12 +68,26 @@ int httpresponse_add_header(HTTPResponse *res, const char *key, const char *valu
     res->headers                      = new_headers;
     res->headers[res->header_count++] = header;
 
-    return 0;
+    return OK;
 }
 
+/**
+ * @brief   Serialize an HTTPResponse struct to a raw string.
+ *
+ * This function takes an HTTPResponse struct and allocates a new string buffer
+ * to contain its serialized form. The caller is responsible for freeing the
+ * allocated memory.
+ *
+ * @param   res  The HTTPResponse struct to serialize.
+ * @param   out_len  A pointer to a size_t to store the length of the serialized
+ *                   string.
+ *
+ * @returns A pointer to the serialized string. NULL if memory allocation fails.
+ *
+ */
 char *httpresponse_serialize(HTTPResponse *res, size_t *out_len)
 {
-    if (!res) return NULL;
+    if (!res || !out_len) return NULL;
 
     size_t capacity = HTTPRESPONSE_CAPACITY;
     char *buffer    = malloc(capacity); // transferring ownership, caller frees the memory
@@ -113,6 +128,7 @@ char *httpresponse_serialize(HTTPResponse *res, size_t *out_len)
 HTTPResponse *response_builder(int status_code, const char *phrase, const char *body,
                                size_t body_length, const char *content_type)
 {
+    if (!phrase || !body || !content_type) return NULL;
     HTTPResponse *response = httpresponse_constructor();
 
     // Ownership moves: caller frees memory

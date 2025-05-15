@@ -149,11 +149,31 @@ int launch(HTTPServer *self)
                 buff[total_read] = '\0';
 
                 printf("[INFO] Received: %s\nBytes read: %d\n", buff, total_read);
+
                 HTTPRequest *httprequest_ptr   = parse_http_request(buff);
+                if (!httprequest_ptr) {
+                    epoll_ctl(epoll_fd, EPOLL_CTL_DEL, client_fd, NULL);
+                    close(client_fd);
+                    perror("[ERROR] Error occured while parsing HTTP request.\n");
+                    break;
+                }
+
                 HTTPResponse *httpresponse_ptr = request_handler(httprequest_ptr);
+                if (!httpresponse_ptr) {
+                    epoll_ctl(epoll_fd, EPOLL_CTL_DEL, client_fd, NULL);
+                    close(client_fd);
+                    perror("[ERROR] Error occured while handling HTTP request.\n");
+                    break;
+                }
 
                 char *response   = httpresponse_serialize(httpresponse_ptr, NULL);
-                int response_len = strlen(response);
+                if (!response){
+                    epoll_ctl(epoll_fd, EPOLL_CTL_DEL, client_fd, NULL);
+                    close(client_fd);
+                    perror("[ERROR] Error occured while serializing HTTP response.\n");
+                    break;
+                }
+                int response_len = sizeof(response);
 
                 // caller of the request_handler is responsible for freeing the memory
                 httpresponse_free(httpresponse_ptr);
