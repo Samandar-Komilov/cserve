@@ -1,7 +1,7 @@
 bin/
 obj/
 static/
-experiments/
+experiments/build/
 cserver.ini
 
 .vscode/
