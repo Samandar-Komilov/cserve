@@ -1,3 +1,9 @@
+bin/
+obj/
+static/
+experiments/
+cserver.ini
+
 .vscode/
 
 build/

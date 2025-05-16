@@ -1,3 +1,0 @@
-### Rust Server
-
-Soon...
