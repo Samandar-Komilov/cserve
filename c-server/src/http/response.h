@@ -17,10 +17,11 @@ typedef struct
     char *version;
     char *reason_phrase;
     char **headers;
-    int header_count;
     char *body;
-    int body_length;
     char *content_type;
+    int header_count;
+    int body_length;
+    int content_length;
 } HTTPResponse;
 
 HTTPResponse *httpresponse_constructor();

@@ -49,7 +49,8 @@ typedef enum
     INVALID_REQUEST_LINE = -711,
     INVALID_METHOD       = -712,
     INVALID_PATH         = -713,
-    INVALID_HEADERS      = -714
+    INVALID_HEADERS      = -714,
+    INVALID_REQUEST_BODY = -715,
 
 } ErrorCode;
 
