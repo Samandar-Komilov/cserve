@@ -11,26 +11,31 @@
 
 #include "common.h"
 
-typedef struct Header
+typedef struct HTTPRequestLine
 {
-    char *key;
+    char *method;
+    char *uri;
+    char *protocol;
+    size_t method_len;
+    size_t uri_len;
+    size_t protocol_len;
+} HTTPRequestLine;
+
+typedef struct HTTPHeader
+{
+    char *name;
     char *value;
-} Header;
+    size_t name_len;
+    size_t value_len;
+} HTTPHeader;
 
 typedef struct HTTPRequest
 {
-    char *method;
-    char *path;
-    char *version;
-
-    Header *headers;
+    HTTPRequestLine request_line;
+    HTTPHeader headers[MAX_HEADERS];
     int header_count;
-
     char *body;
-    size_t body_length;
+    size_t body_len;
 } HTTPRequest;
-
-HTTPRequest *httprequest_constructor();
-void httprequest_free(HTTPRequest *req);
 
 #endif

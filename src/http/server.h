@@ -13,9 +13,23 @@
 #include "parsers.h"
 #include "common.h"
 
+typedef struct Connection
+{
+    int socket;          // client socket
+    char *buffer;        // dynamic buffer for request
+    size_t buffer_size;  // allocated size for buffer
+    size_t len;          // current data length of buffer
+    size_t parsed_bytes; // bytes parsed
+    ParseState state;    // parsing state
+    HTTPRequest request; // parsed request
+} Connection;
+
 typedef struct HTTPServer
 {
     SocketServer *server;
+    Connection *connections;
+    size_t active_count;
+    int epoll_fd;
 
     char *static_dir;
     char **proxy_backends;

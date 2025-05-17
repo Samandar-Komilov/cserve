@@ -9,8 +9,8 @@
 #include "request.h"
 #include "response.h"
 
-HTTPRequest *parse_http_request(char *request_str);
-int parse_request_line(HTTPRequest *request_ptr, char *request_line);
-int parse_headers(HTTPRequest *request_ptr, char *headers);
-int parse_body(HTTPRequest *request_ptr, char *body, int content_length);
+int parse_request_line(HTTPRequest *req_t, const char *reqstr, size_t len);
+int parse_header(HTTPHeader *header, const char *line, size_t len);
+int parse_http_request(const char *data, size_t len, HTTPRequest *req);
+void print_request(const HTTPRequest *req);
 const char *get_mime_type(const char *filepath);

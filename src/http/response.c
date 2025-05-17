@@ -13,14 +13,14 @@ HTTPResponse *httpresponse_constructor()
     HTTPResponse *res = malloc(sizeof(HTTPResponse));
     if (!res) return NULL;
 
-    res->status_code   = 200;
-    res->version       = NULL;
-    res->reason_phrase = NULL;
-    res->headers       = NULL;
-    res->body          = NULL;
-    res->content_type  = NULL;
-    res->header_count  = 0;
-    res->body_length   = 0;
+    res->status_code    = 200;
+    res->version        = NULL;
+    res->reason_phrase  = NULL;
+    res->headers        = NULL;
+    res->body           = NULL;
+    res->content_type   = NULL;
+    res->header_count   = 0;
+    res->body_length    = 0;
     res->content_length = 0;
 
     return res;
@@ -89,7 +89,7 @@ char *httpresponse_serialize(HTTPResponse *res, size_t *out_len)
 {
     if (!res || !out_len) return NULL;
 
-    size_t capacity = HTTPRESPONSE_CAPACITY;
+    size_t capacity = INITIAL_RESPONSE_SIZE;
     char *buffer    = malloc(capacity); // transferring ownership, caller frees the memory
     if (!buffer) return NULL;
 
