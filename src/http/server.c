@@ -284,6 +284,7 @@ int launch(HTTPServer *self)
                     epoll_ctl(self->epoll_fd, EPOLL_CTL_DEL, client_fd, NULL);
                     close(client_fd);
                     free(conn->buffer);
+                    free_http_request(&conn->request);
                     conn->buffer = NULL;
                     conn->socket = 0;
                     self->active_count--;
@@ -300,17 +301,16 @@ int launch(HTTPServer *self)
 
 HTTPResponse *request_handler(HTTPRequest *request_ptr)
 {
-    // TODO: prevent segfault - check before strdup()
     if (request_ptr == NULL) return NULL;
     if (request_ptr->request_line.uri == NULL) return NULL;
 
-    if (strlen(request_ptr->request_line.uri) > 0)
+    if (request_ptr->request_line.uri_len > 0)
     {
         if (strncmp(request_ptr->request_line.uri, "/static", 7) == 0)
         {
             char filepath[PATH_MAX];
-            if (snprintf(filepath, sizeof(filepath), "%s%s", realpath(BASE_DIR, NULL),
-                         request_ptr->request_line.uri) < 0)
+            if (snprintf(filepath, sizeof(filepath), "%s%.*s", realpath(BASE_DIR, NULL),
+                         (int)request_ptr->request_line.uri_len, request_ptr->request_line.uri) < 0)
             {
                 char response_buffer[] = "<h1>snprintf() error</h1>";
                 HTTPResponse *response = response_builder(404, "Not Found", response_buffer,
@@ -319,14 +319,6 @@ HTTPResponse *request_handler(HTTPRequest *request_ptr)
             };
 
             // printf("[LOG] %s %s %s\n", filepath, token, path);
-
-            if (access(filepath, R_OK) != 0)
-            {
-                char response_buffer[] = "<h1>snprintf() error</h1>";
-                HTTPResponse *response = response_builder(403, "Forbidden", response_buffer,
-                                                          sizeof(response_buffer), "text/html");
-                return response;
-            }
 
             int fd = open(filepath, O_RDONLY);
             if (fd == -1)

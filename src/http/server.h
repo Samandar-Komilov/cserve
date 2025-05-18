@@ -12,6 +12,7 @@
 #include "sock/server.h"
 #include "parsers.h"
 #include "common.h"
+#include "request.h"
 
 typedef struct Connection
 {

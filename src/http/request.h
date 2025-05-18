@@ -39,5 +39,6 @@ typedef struct HTTPRequest
 } HTTPRequest;
 
 HTTPRequest *create_http_request();
+void free_http_request(HTTPRequest *req);
 
 #endif
