@@ -10,9 +10,10 @@
 
 int parse_request_line(HTTPRequest *req_t, const char *reqstr, size_t len)
 {
+    printf("[INFO] Request Line parser: %s, %ld\n", reqstr, len);
+    printf("Req ptr: %p\n", req_t);
     if (!req_t || !reqstr) return -1;
     printf("Req parser is working.\n");
-    printf("%s\n", reqstr);
 
     // Putting pointers at start and end of the incoming string
     const char *ptr = reqstr;
@@ -72,7 +73,9 @@ int parse_http_request(const char *data, size_t len, HTTPRequest *req)
 {
     const char *ptr = data;
     const char *end = data + len;
-    int consumed;
+    int consumed    = 0;
+
+    printf("Data ptr: %.*s\nEnd - ptr: %ld\n", (int)len, ptr, end - ptr);
 
     consumed = parse_request_line(req, ptr, end - ptr);
     if (consumed < 0) return -1;

@@ -68,10 +68,11 @@ int launch(HTTPServer *self)
             if (events[i].data.fd == self->server->socket)
             {
                 // Accept a new connection
-                int address_length = sizeof(self->server->address);
+                struct sockaddr_in client_addr;
+                socklen_t client_len = sizeof(client_addr);
+
                 int client_fd =
-                    accept(self->server->socket, (struct sockaddr *)&self->server->address,
-                           (socklen_t *)&address_length);
+                    accept(self->server->socket, (struct sockaddr *)&client_addr, &client_len);
                 if (client_fd == -1)
                 {
                     fprintf(stderr, "[ERROR] Error while accepting a new connection");
@@ -105,7 +106,7 @@ int launch(HTTPServer *self)
                     close(client_fd);
                     continue;
                 }
-                conn->buffer_size  = 0;
+                conn->buffer_size  = INITIAL_BUFFER_SIZE;
                 conn->len          = 0;
                 conn->parsed_bytes = 0;
                 conn->state        = PARSE_REQUEST_LINE;
@@ -137,9 +138,9 @@ int launch(HTTPServer *self)
                     continue;
                 }
 
-                inet_ntop(self->server->address.sin_family,
-                          (struct sockaddr *)&self->server->address, s, sizeof(s));
-                printf("[INFO] Connected: %s, FD: %d\n", s, client_fd);
+                inet_ntop(AF_INET, &client_addr.sin_addr, s, sizeof(s));
+                printf("[INFO] Connected: %s:%d, FD: %d\n", s, ntohs(client_addr.sin_port),
+                       client_fd);
             }
             else
             {
@@ -150,14 +151,14 @@ int launch(HTTPServer *self)
                 // Read data in loop (considering partial reads)
                 while (1)
                 {
+                    // Check if buffer is full
                     // if (conn->len >= conn->buffer_size)
                     // {
-                    //     // Resize buffer
                     //     size_t new_size  = conn->buffer_size * 2;
                     //     char *new_buffer = realloc(conn->buffer, new_size);
                     //     if (!new_buffer)
                     //     {
-                    //         fprintf(stderr, "[ERROR] realloc buffer");
+                    //         fprintf(stderr, "[ERROR] realloc buffer for FD %d\n", client_fd);
                     //         conn->state = PARSE_ERROR;
                     //         break;
                     //     }
@@ -167,24 +168,55 @@ int launch(HTTPServer *self)
 
                     int bytes_read =
                         recv(client_fd, conn->buffer + conn->len, conn->buffer_size - conn->len, 0);
-                    if (bytes_read <= 0)
+                    if (bytes_read < 0)
                     {
-                        if (bytes_read < 0 && (errno == EAGAIN || errno == EWOULDBLOCK))
+                        if (errno == EAGAIN || errno == EWOULDBLOCK)
                         {
                             // All data read
                             break;
                         }
-                        conn->state = PARSE_ERROR;
+                        else
+                        {
+                            perror("[ERROR] recv");
+                            conn->state = PARSE_ERROR;
+                            break;
+                        }
+                    }
+                    else if (bytes_read == 0)
+                    {
+                        // Client closed connection
+                        if (conn->len > 0)
+                        {
+                            // Data in buffer, try parsing
+                            printf("[INFO] FD %d closed, %zu bytes in buffer\n", client_fd,
+                                   conn->len);
+                        }
+                        else
+                        {
+                            // No data, treat as error
+                            printf("[INFO] FD %d closed with no data\n", client_fd);
+                            conn->state = PARSE_ERROR;
+                        }
                         break;
                     }
-                    conn->len += bytes_read;
+                    else
+                    {
+                        conn->len += bytes_read;
+                        printf("[INFO] FD %d read %d bytes, total %zu\n", client_fd, bytes_read,
+                               conn->len);
+                    }
                 }
+                conn->buffer[conn->len] = '\0';
+
+                printf("[INFO] FD %d, Len: %d, buffer: %s\n", client_fd, (int)conn->len,
+                       conn->buffer);
 
                 // Parse request if data available
                 if (conn->len > conn->parsed_bytes && conn->state != PARSE_DONE)
                 {
-                    HTTPRequest *req = {0};
-                    int consumed     = parse_http_request(conn->buffer, conn->len, req);
+                    HTTPRequest *req = create_http_request();
+                    printf("Req: %p\n", req);
+                    int consumed = parse_http_request(conn->buffer, conn->len, req);
                     if (consumed < 0)
                     {
                         conn->state = PARSE_ERROR;

@@ -32,10 +32,12 @@ typedef struct HTTPHeader
 typedef struct HTTPRequest
 {
     HTTPRequestLine request_line;
-    HTTPHeader headers[MAX_HEADERS];
+    HTTPHeader *headers;
     int header_count;
     char *body;
     size_t body_len;
 } HTTPRequest;
+
+HTTPRequest *create_http_request();
 
 #endif
