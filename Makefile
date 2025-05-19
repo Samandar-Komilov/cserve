@@ -10,8 +10,8 @@ OBJ_DIR = $(BUILD_DIR)/obj
 BIN_DIR = $(BUILD_DIR)/bin
 
 # Files
-APP_SRC = $(wildcard $(SRC_DIR)/*.c) $(wildcard $(SRC_DIR)/sock/*.c) $(wildcard $(SRC_DIR)/http/*.c) $(wildcard $(SRC_DIR)/utils/*.c) $(wildcard $(SRC_DIR)/configs/*.c)
-TEST_SRC = $(wildcard $(TEST_DIR)/*.c) $(wildcard $(SRC_DIR)/http/*.c) $(wildcard $(SRC_DIR)/sock/*.c) $(wildcard $(SRC_DIR)/utils/*.c) $(wildcard $(SRC_DIR)/configs/*.c)
+APP_SRC = $(wildcard $(SRC_DIR)/*.c) $(wildcard $(SRC_DIR)/sock/*.c) $(wildcard $(SRC_DIR)/http/*.c) $(wildcard $(SRC_DIR)/utils/*.c)
+TEST_SRC = $(wildcard $(TEST_DIR)/*.c) $(wildcard $(SRC_DIR)/http/*.c) $(wildcard $(SRC_DIR)/sock/*.c) $(wildcard $(SRC_DIR)/utils/*.c)
 
 APP_OBJ = $(APP_SRC:.c=.o)
 TEST_OBJ = $(TEST_SRC:.c=.o)

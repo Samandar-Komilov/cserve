@@ -28,15 +28,17 @@
 #include <sys/stat.h>
 #include <sys/epoll.h>
 
+#include "utils/logger.h"
+
 #define str(x) #x
 #define xstr(x) str(x)
 
-#define INITIAL_BUFFER_SIZE 30000
+#define INITIAL_BUFFER_SIZE 4096
 #define MAX_EPOLL_EVENTS 1024
 #define MAX_CONNECTIONS 1000
 #define MAX_HEADERS 50
 #define MAX_BACKENDS 16
-#define INITIAL_RESPONSE_SIZE 10000
+#define INITIAL_RESPONSE_SIZE 4096
 
 #define DEFAULT_CONFIG_PATH "/home/voidp/Projects/samandar/1lang1server/cserver"
 #define BASE_DIR "./"

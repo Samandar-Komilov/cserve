@@ -10,10 +10,7 @@
 
 int parse_request_line(HTTPRequest *req_t, const char *reqstr, size_t len)
 {
-    printf("[INFO] Request Line parser: %s, %ld\n", reqstr, len);
-    printf("Req ptr: %p\n", req_t);
     if (!req_t || !reqstr) return -1;
-    printf("Req parser is working.\n");
 
     // Putting pointers at start and end of the incoming string
     const char *ptr = reqstr;
@@ -39,6 +36,8 @@ int parse_request_line(HTTPRequest *req_t, const char *reqstr, size_t len)
     req_t->request_line.protocol     = (char *)ptr;
     req_t->request_line.protocol_len = crlf - ptr;
     ptr                              = crlf + 2;
+
+    LOG("DEBUG", "Request line parsed: %.*s", req_t->request_line.uri_len, req_t->request_line.uri);
 
     return ptr - reqstr;
 }
@@ -66,6 +65,8 @@ int parse_header(HTTPHeader *header, const char *line, size_t len)
     header->value_len = crlf - ptr;
     ptr               = crlf + 2;
 
+    LOG("DEBUG", "Header parsed: %.*s", header->name_len, header->name);
+
     return ptr - line;
 }
 
@@ -74,8 +75,6 @@ int parse_http_request(const char *data, size_t len, HTTPRequest *req)
     const char *ptr = data;
     const char *end = data + len;
     int consumed    = 0;
-
-    printf("Data ptr: %.*s\nEnd - ptr: %ld\n", (int)len, ptr, end - ptr);
 
     consumed = parse_request_line(req, ptr, end - ptr);
     if (consumed < 0) return -1;
@@ -97,6 +96,8 @@ int parse_http_request(const char *data, size_t len, HTTPRequest *req)
     // Body
     req->body     = (char *)ptr;
     req->body_len = end - ptr;
+
+    LOG("DEBUG", "HTTP request parsed.");
 
     return 0;
 }
