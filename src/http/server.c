@@ -1,30 +1,13 @@
 /**
  * @file    HTTPServer.c
  * @author  Samandar Komil
- * @date    19 April 2025
+ * @date    17 May 2025
  * @brief   HTTPServer methods and utility function implementations
  *
  */
 
 #include "server.h"
 
-/**
- * @brief   Launches the HTTP server, binding and listening on the port specified in
- *          the HTTPServer struct.
- *
- * @param   self  The HTTPServer struct containing the server config and methods.
- *
- * @returns An error code indicating the success or failure of the server launch.
- *
- * This function takes care of binding and listening on the configured port. It
- * then enters an infinite loop, accepting and processing incoming requests.
- *
- * The function will block until a request is received, process it with the
- * configured request_handler, and then send the response back to the client.
- *
- * If the bind or listen calls fail, an error code is returned. Otherwise, the
- * function will run indefinitely until the program is terminated.
- */
 int launch(HTTPServer *self)
 {
     char s[INET6_ADDRSTRLEN];
@@ -34,41 +17,50 @@ int launch(HTTPServer *self)
     {
         return SOCKET_BIND_ERROR;
     }
-
     if ((listen(self->server->socket, self->server->queue)) < 0)
     {
         return SOCKET_LISTEN_ERROR;
     }
 
-    int epoll_fd = epoll_create1(0);
-    if (epoll_fd == -1)
+    // Initialize epoll
+    self->epoll_fd = epoll_create1(0);
+    if (self->epoll_fd == -1)
     {
         fprintf(stderr, "[ERROR] epoll_create1() call");
+        LOG("ERROR", "Failed to initialize epoll instance.");
         exit(1);
     }
 
+    // Initialize connections
+    self->connections = calloc(MAX_CONNECTIONS, sizeof(Connection));
+    if (!self->connections)
+    {
+        LOG("ERROR", "Failed to allocate memory for connections.");
+        close(self->epoll_fd);
+        return -1;
+    }
+    self->active_count = 0;
+
+    // Add server socket to epoll
     struct epoll_event ev, events[MAX_EPOLL_EVENTS];
     ev.events  = EPOLLIN;
     ev.data.fd = self->server->socket;
-    if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, self->server->socket, &ev) == -1)
+    if (epoll_ctl(self->epoll_fd, EPOLL_CTL_ADD, self->server->socket, &ev) == -1)
     {
-        close(epoll_fd);
+        close(self->epoll_fd);
         close(self->server->socket);
-        perror("[ERROR] Failed to add server socket to epoll event loop.");
-        exit(1);
+        LOG("ERROR", "Failed to add server socket to epoll event loop.");
+        return -1;
     }
 
-    printf("\033[32m===== Waiting for connections on port %d =====\033[0m\n", self->server->port);
+    LOG("INFO", "Waiting for connections on port %d", self->server->port);
 
     while (1)
     {
-        char buff[MAX_BUFFER_SIZE];
-        int address_length = sizeof(self->server->address);
-
-        int n_ready = epoll_wait(epoll_fd, events, MAX_EPOLL_EVENTS, 60);
+        int n_ready = epoll_wait(self->epoll_fd, events, MAX_EPOLL_EVENTS, 60);
         if (n_ready == -1)
         {
-            perror("[ERROR] Failed to wait for epoll events.");
+            LOG("ERROR", "Failed to wait for epoll events.");
             continue;
         }
 
@@ -77,46 +69,106 @@ int launch(HTTPServer *self)
             if (events[i].data.fd == self->server->socket)
             {
                 // Accept a new connection
+                struct sockaddr_in client_addr;
+                socklen_t client_len = sizeof(client_addr);
+
                 int client_fd =
-                    accept(self->server->socket, (struct sockaddr *)&self->server->address,
-                           (socklen_t *)&address_length);
+                    accept(self->server->socket, (struct sockaddr *)&client_addr, &client_len);
                 if (client_fd == -1)
                 {
-                    perror("[ERROR] Error while accepting a new connection");
+                    LOG("ERROR", "Failed to accept a new connection.");
                     close(client_fd);
                     continue;
                 }
 
-                // Make socket nonblocking
-                int flags = fcntl(client_fd, F_GETFL, 0);
-                if (flags == -1) return -1;
-                fcntl(client_fd, F_SETFL, flags | O_NONBLOCK);
-
-                ev.events  = EPOLLIN;
-                ev.data.fd = client_fd;
-                if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, client_fd, &ev) == -1)
+                // Find free connection slot from connections pool
+                Connection *conn = NULL;
+                for (size_t j = 0; j < MAX_CONNECTIONS; j++)
                 {
-                    perror("[ERROR] Error while responding to the client socket: ");
-                    epoll_ctl(epoll_fd, EPOLL_CTL_DEL, events[i].data.fd, NULL);
-                    close(events[i].data.fd);
+                    if (self->connections[j].socket == 0)
+                    {
+                        conn = &self->connections[j];
+                        break;
+                    }
+                }
+                if (!conn || self->active_count >= MAX_CONNECTIONS)
+                {
+                    LOG("ERROR", "No free connection slots available.");
+                    close(client_fd);
                     continue;
                 }
 
-                printf("[INFO] Client FD: %d, Assigned FD: %d\n", client_fd, ev.data.fd);
+                // Initialize a connection
+                conn->socket = client_fd;
+                conn->buffer = (char *)malloc(INITIAL_BUFFER_SIZE);
+                if (!conn->buffer)
+                {
+                    LOG("ERROR", "Failed to allocate memory for connection buffer.");
+                    close(client_fd);
+                    continue;
+                }
+                conn->buffer_size  = INITIAL_BUFFER_SIZE;
+                conn->len          = 0;
+                conn->parsed_bytes = 0;
+                conn->state        = PARSE_REQUEST_LINE;
+                memset(&conn->request, 0, sizeof(HTTPRequest));
+                self->active_count++;
 
-                inet_ntop(self->server->address.sin_family,
-                          (struct sockaddr *)&self->server->address, s, sizeof(s));
-                printf("[INFO] Got connection from %s\n", s);
+                // Set socket nonblocking
+                int flags = fcntl(client_fd, F_GETFL, 0);
+                if (flags == -1 || fcntl(client_fd, F_SETFL, flags | O_NONBLOCK))
+                {
+                    LOG("ERROR", "Failed to set socket nonblocking.");
+                    free(conn->buffer);
+                    close(client_fd);
+                    conn->socket = 0;
+                    self->active_count--;
+                    continue;
+                }
+
+                // Add to epoll
+                ev.events   = EPOLLIN;
+                ev.data.ptr = conn;
+                if (epoll_ctl(self->epoll_fd, EPOLL_CTL_ADD, client_fd, &ev) == -1)
+                {
+                    LOG("ERROR", "Failed to add client socket to epoll event loop.");
+                    free(conn->buffer);
+                    close(client_fd);
+                    conn->socket = 0;
+                    self->active_count--;
+                    continue;
+                }
+
+                inet_ntop(AF_INET, &client_addr.sin_addr, s, sizeof(s));
+                LOG("INFO", "Connected: %s:%d, FD: %d", s, ntohs(client_addr.sin_port), client_fd);
             }
             else
             {
-                // Read from client socket and handle accordingly
-                int client_fd  = events[i].data.fd;
-                int total_read = 0;
+                // Handle client data
+                Connection *conn = (Connection *)events[i].data.ptr;
+                int client_fd    = conn->socket;
+
+                // Read data in loop (considering partial reads)
                 while (1)
                 {
+                    LOG("WARNING", "Implement buffer reallocation if needed while reading data.");
+                    // TODO: Check if buffer is full
+                    // if (conn->len >= conn->buffer_size)
+                    // {
+                    //     size_t new_size  = conn->buffer_size * 2;
+                    //     char *new_buffer = realloc(conn->buffer, new_size);
+                    //     if (!new_buffer)
+                    //     {
+                    //         fprintf(stderr, "[ERROR] realloc buffer for FD %d\n", client_fd);
+                    //         conn->state = PARSE_ERROR;
+                    //         break;
+                    //     }
+                    //     conn->buffer      = new_buffer;
+                    //     conn->buffer_size = new_size;
+                    // }
+
                     int bytes_read =
-                        recv(client_fd, buff + total_read, MAX_BUFFER_SIZE - total_read, 0);
+                        recv(client_fd, conn->buffer + conn->len, conn->buffer_size - conn->len, 0);
                     if (bytes_read < 0)
                     {
                         if (errno == EAGAIN || errno == EWOULDBLOCK)
@@ -126,143 +178,190 @@ int launch(HTTPServer *self)
                         }
                         else
                         {
-                            epoll_ctl(epoll_fd, EPOLL_CTL_DEL, client_fd, NULL);
-                            close(client_fd);
-                            perror("[ERROR] recv()");
+                            LOG("ERROR", "Failed to read data from client using recv().");
+                            conn->state = PARSE_ERROR;
                             break;
                         }
                     }
                     else if (bytes_read == 0)
                     {
                         // Client closed connection
-                        epoll_ctl(epoll_fd, EPOLL_CTL_DEL, client_fd, NULL);
-                        close(client_fd);
-                        perror("[INFO] Client disconnected.\n");
+                        if (conn->len > 0)
+                        {
+                            // Data in buffer, try parsing
+                            LOG("INFO",
+                                "Socket FD %d closed with successful read, %zu bytes in buffer",
+                                client_fd, conn->len);
+                        }
+                        else
+                        {
+                            // No data, treat as error
+                            LOG("ERROR", "Socket FD %d closed with no data", client_fd);
+                            conn->state = PARSE_ERROR;
+                        }
                         break;
                     }
                     else
                     {
-                        total_read += bytes_read;
-                        if (total_read >= MAX_BUFFER_SIZE) break;
+                        conn->len += bytes_read;
+                        LOG("DEBUG", "Read %d bytes from socket FD %d", bytes_read, client_fd);
                     }
                 }
-                buff[total_read] = '\0';
+                conn->buffer[conn->len] = '\0';
 
-                printf("[INFO] Received: %s\nBytes read: %d\n", buff, total_read);
+                LOG("DEBUG", "FD %d, Len: %d", client_fd, (int)conn->len);
 
-                HTTPRequest *httprequest_ptr   = parse_http_request(buff);
-                if (!httprequest_ptr) {
-                    epoll_ctl(epoll_fd, EPOLL_CTL_DEL, client_fd, NULL);
-                    close(client_fd);
-                    perror("[ERROR] Error occured while parsing HTTP request.\n");
-                    break;
-                }
-
-                HTTPResponse *httpresponse_ptr = request_handler(httprequest_ptr);
-                if (!httpresponse_ptr) {
-                    epoll_ctl(epoll_fd, EPOLL_CTL_DEL, client_fd, NULL);
-                    close(client_fd);
-                    perror("[ERROR] Error occured while handling HTTP request.\n");
-                    break;
-                }
-
-                char *response   = httpresponse_serialize(httpresponse_ptr, NULL);
-                if (!response){
-                    epoll_ctl(epoll_fd, EPOLL_CTL_DEL, client_fd, NULL);
-                    close(client_fd);
-                    perror("[ERROR] Error occured while serializing HTTP response.\n");
-                    break;
-                }
-                int response_len = sizeof(response);
-
-                // caller of the request_handler is responsible for freeing the memory
-                httpresponse_free(httpresponse_ptr);
-
-                printf("===== Response:\n%s\n\n", response);
-
-                int total_sent = 0;
-                while (total_sent < response_len)
+                // Parse request if data available
+                if (conn->len > conn->parsed_bytes && conn->state != PARSE_DONE)
                 {
-                    int bytes_sent = send(events[i].data.fd, response + total_sent,
-                                          response_len - total_sent, 0);
-                    if (bytes_sent <= 0)
+                    HTTPRequest *req = create_http_request();
+                    int consumed     = parse_http_request(conn->buffer, conn->len, req);
+                    if (consumed < 0)
                     {
-                        perror("[ERROR] Error while sending response to client socket: ");
+                        LOG("ERROR", "Failed to parse HTTP request.");
+                        conn->state = PARSE_ERROR;
+                    }
+                    else
+                    {
+                        LOG("DEBUG", "Successfully parsed HTTP request.");
+                        conn->request      = *req;
+                        conn->state        = PARSE_DONE;
+                        conn->parsed_bytes = conn->len;
+                    }
+                }
+
+                // Handle request if fully parsed
+                if (conn->state == PARSE_DONE)
+                {
+                    LOG("DEBUG", "Fully parsed HTTP request below:");
+                    // print_request(&conn->request);
+
+                    HTTPResponse *response = request_handler(&conn->request);
+                    if (!response)
+                    {
+                        LOG("ERROR", "Failed to handle HTTP request (no response generated).");
+                        conn->state = PARSE_ERROR;
+                    }
+                    else
+                    {
+                        size_t response_len;
+                        char *response_str = httpresponse_serialize(response, &response_len);
+                        httpresponse_free(response);
+                        if (!response_str)
+                        {
+                            LOG("ERROR", "Failed to serialize HTTP response.");
+                            conn->state = PARSE_ERROR;
+                        }
+                        else
+                        {
+                            // Send response
+                            size_t total_sent = 0;
+                            while (total_sent < response_len)
+                            {
+                                int bytes_sent = send(client_fd, response_str + total_sent,
+                                                      response_len - total_sent, 0);
+                                if (bytes_sent <= 0)
+                                {
+                                    LOG("ERROR", "Error while sending response to client socket.");
+                                    break;
+                                }
+                                total_sent += bytes_sent;
+                            }
+
+                            LOG("DEBUG", "Sent %ld bytes response to client FD %d.", total_sent,
+                                client_fd);
+                        }
+                        // LOG("DEBUG", "Response string: %s", response_str);
+                        free(response_str);
+                    }
+                }
+
+                // Check for keep-alive
+                int keep_alive = 0;
+                for (int j = 0; j < conn->request.header_count; j++)
+                {
+                    if (strncmp(conn->request.headers[j].name, "Connection",
+                                conn->request.headers[j].name_len) == 0 &&
+                        strncmp(conn->request.headers[j].value, "keep-alive",
+                                conn->request.headers[j].value_len) == 0)
+                    {
+                        keep_alive = 1;
                         break;
                     }
-                    total_sent += bytes_sent;
                 }
 
-                printf("[INFO] Response sent: %d\n", total_sent);
+                if (keep_alive)
+                {
+                    // Reset for next request
+                    conn->len          = 0;
+                    conn->parsed_bytes = 0;
+                    conn->state        = PARSE_REQUEST_LINE;
+                    memset(&conn->request, 0, sizeof(HTTPRequest));
+                    LOG("DEBUG", "Connection is keep-alive for client FD %d", client_fd);
+                }
+                else
+                {
+                    LOG("DEBUG", "Connection is not keep-alive for client FD %d", client_fd);
+                    conn->state = PARSE_REQUEST_LINE; // Close connection
+                    epoll_ctl(self->epoll_fd, EPOLL_CTL_DEL, client_fd, NULL);
+                    close(client_fd);
+                    free(conn->buffer);
+                    free_http_request(&conn->request);
+                    conn->buffer = NULL;
+                    conn->socket = 0;
+                    self->active_count--;
+                }
 
-                // Caller owned malloced buffer, so frees it now
-                free(response);
+                if (conn->state == PARSE_ERROR)
+                {
+                    const char *error_response =
+                        "HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\n\r\n";
+                    send(client_fd, error_response, strlen(error_response), 0);
+
+                    epoll_ctl(self->epoll_fd, EPOLL_CTL_DEL, client_fd, NULL);
+                    close(client_fd);
+                    free(conn->buffer);
+                    free_http_request(&conn->request);
+                    conn->buffer = NULL;
+                    conn->socket = 0;
+                    self->active_count--;
+
+                    LOG("ERROR", "Connection with client FD %d closed due to parse error.",
+                        client_fd);
+                }
             }
         }
     }
 
-    close(epoll_fd);
+    close(self->epoll_fd);
     return 0;
 }
 
-/**
- * @brief   HTTP request handler.
- *
- * This function takes an HTTPRequest struct as argument and returns an
- * HTTPResponse struct. It handles the request by looking at the path and
- * deciding what to do with it:
- *
- * - If the path is /static, it serves the file at the given path.
- * - If the path is /api, it calls the reverse proxy handler.
- * - Otherwise, it returns a 404 Not Found response.
- *
- * @example
- * HTTPRequest request = { .path = "/static/index.html" };
- * HTTPResponse *response = request_handler(&request);
- * // response is an HTTPResponse struct with status code 200, body containing the file contents
- * // and other fields populated accordingly.
- *
- * @param   request_ptr  The HTTPRequest struct to handle.
- *
- * @returns A pointer to an HTTPResponse struct containing the response to the
- *          request.
- */
 HTTPResponse *request_handler(HTTPRequest *request_ptr)
 {
-    // TODO: prevent segfault - check before strdup()
     if (request_ptr == NULL) return NULL;
-    if (request_ptr->path == NULL) return NULL;
-    char *path  = strdup(request_ptr->path);
-    char *token = strtok(path, "/");
+    if (request_ptr->request_line.uri == NULL) return NULL;
 
-    if (token)
+    if (request_ptr->request_line.uri_len > 0)
     {
-        if (strcmp(token, "static") == 0)
+        if (strncmp(request_ptr->request_line.uri, "/static", 7) == 0)
         {
             char filepath[PATH_MAX];
-            if (snprintf(filepath, sizeof(filepath), "%s%s", realpath(BASE_DIR, NULL),
-                         request_ptr->path) < 0)
+            if (snprintf(filepath, sizeof(filepath), "%s%.*s", realpath(BASE_DIR, NULL),
+                         (int)request_ptr->request_line.uri_len, request_ptr->request_line.uri) < 0)
             {
-                char response_buffer[] = "<h1>snprintf() error</h1>";
+                LOG("ERROR", "Failed to build filepath.");
+                char response_buffer[] = "<h1>404 Not Found</h1>";
                 HTTPResponse *response = response_builder(404, "Not Found", response_buffer,
                                                           sizeof(response_buffer), "text/html");
                 return response;
             };
 
-            // printf("[LOG] %s %s %s\n", filepath, token, path);
-
-            if (access(filepath, R_OK) != 0)
-            {
-                char response_buffer[] = "<h1>snprintf() error</h1>";
-                HTTPResponse *response = response_builder(403, "Forbidden", response_buffer,
-                                                          sizeof(response_buffer), "text/html");
-                return response;
-            }
-
             int fd = open(filepath, O_RDONLY);
             if (fd == -1)
             {
-                char response_buffer[] = "<h1>snprintf() error</h1>";
+                LOG("ERROR", "Failed to open file.");
+                char response_buffer[] = "<h1>404 Not Found</h1>";
                 HTTPResponse *response = response_builder(404, "Not Found", response_buffer,
                                                           sizeof(response_buffer), "text/html");
                 return response;
@@ -278,8 +377,9 @@ HTTPResponse *request_handler(HTTPRequest *request_ptr)
 
             if (!buffer)
             {
+                LOG("ERROR", "Failed to allocate buffer.");
                 close(fd);
-                char response_buffer[] = "<h1>Memory alloc failed</h1>";
+                char response_buffer[] = "<h1>Internal Server Error</h1>";
                 return response_builder(500, "Internal Server Error", response_buffer,
                                         sizeof(response_buffer), "text/html");
             }
@@ -290,19 +390,22 @@ HTTPResponse *request_handler(HTTPRequest *request_ptr)
                 size_t bytes = read(fd, buffer + total_read, filesize - total_read);
                 if (bytes <= 0)
                 {
+                    LOG("ERROR", "Failed to read file.");
                     free(buffer);
-                    char response_buffer[] = "<h1>Failed to read file</h1>";
+                    char response_buffer[] = "<h1>Internal Server Error</h1>";
                     return response_builder(500, "Internal Server Error", response_buffer,
                                             sizeof(response_buffer), "text/html");
                 }
                 total_read += bytes;
             }
 
-            printf("Read %zu bytes\nActual filesize: %zu\n", total_read, filesize);
+            LOG("DEBUG", "Read %zu bytes\nActual filesize: %zu", total_read, filesize);
+
             if (total_read != filesize)
             {
+                LOG("ERROR", "Failed to read file.");
                 free(buffer);
-                char response_buffer[] = "<h1>Failed to read file</h1>";
+                char response_buffer[] = "<h1>Internal Server Error</h1>";
                 return response_builder(500, "Internal Server Error", response_buffer,
                                         sizeof(response_buffer), "text/html");
             }
@@ -313,13 +416,13 @@ HTTPResponse *request_handler(HTTPRequest *request_ptr)
             close(fd);
             return response;
         }
-        else if (strcmp(token, "api") == 0)
+        else if (strncmp(request_ptr->request_line.uri, "/api", 4) == 0)
         {
             // TODO: Reverse proxy
-            char *api_path = request_ptr->path + strlen("/api");
+            char *api_path = request_ptr->request_line.uri + strlen("/api");
             if (*api_path == '\0') api_path = "/";
 
-            char proxy_request[MAX_BUFFER_SIZE];
+            char proxy_request[INITIAL_BUFFER_SIZE];
             int proxy_request_len =
                 snprintf(proxy_request, sizeof(proxy_request),
                          "%s %s HTTP/1.1\r\n"
@@ -327,22 +430,24 @@ HTTPResponse *request_handler(HTTPRequest *request_ptr)
                          "Content-Length: %zu\r\n"
                          "Connection: close\r\n"
                          "\r\n",
-                         request_ptr->method, api_path, request_ptr->body_length);
+                         request_ptr->request_line.method, api_path, request_ptr->body_len);
 
             if (proxy_request_len < 0)
             {
-                char response_buffer[] = "<h1>snprintf() error</h1>";
+                LOG("ERROR", "Failed to build proxy request.");
+                char response_buffer[] = "<h1>Internal Server Error</h1>";
                 return response_builder(500, "Internal Server Error", response_buffer,
                                         sizeof(response_buffer), "text/html");
             }
 
             // Then, append the request body to the proxy_request string
-            strncat(proxy_request, request_ptr->body, request_ptr->body_length);
+            strncat(proxy_request, request_ptr->body, request_ptr->body_len);
 
             int backend_fd = connect_to_backend("localhost", "8000");
             if (backend_fd == -1)
             {
-                char response_buffer[] = "<h1>Failed to connect to backend</h1>";
+                LOG("ERROR", "Failed to connect to backend.");
+                char response_buffer[] = "<h1>502 Bad Gateway</h1>";
                 return response_builder(502, "Bad Gateway", response_buffer,
                                         sizeof(response_buffer), "text/html");
             }
@@ -350,18 +455,21 @@ HTTPResponse *request_handler(HTTPRequest *request_ptr)
             send(backend_fd, proxy_request, proxy_request_len, 0);
 
             // Receive response from backend
-            char proxy_response[MAX_BUFFER_SIZE];
+            char proxy_response[INITIAL_BUFFER_SIZE];
             int proxy_response_len = recv(backend_fd, proxy_response, sizeof(proxy_response), 0);
 
             if (proxy_response_len < 0)
             {
-                char response_buffer[] = "<h1>Failed to read from backend</h1>";
+                LOG("ERROR", "Failed to read from backend.");
+                char response_buffer[] = "<h1>502 Bad Gateway</h1>";
                 return response_builder(502, "Bad Gateway", response_buffer,
                                         sizeof(response_buffer), "text/html");
             }
 
             proxy_response[proxy_response_len] = '\0';
             close(backend_fd);
+
+            LOG("DEBUG", "Received %d bytes response from backend.", proxy_response_len);
 
             // TODO: parse response headers, here we directly return body
             char *body = strstr(proxy_response, "\r\n\r\n");
@@ -376,6 +484,8 @@ HTTPResponse *request_handler(HTTPRequest *request_ptr)
         }
         else
         {
+            LOG("DEBUG", "Request to unknown URI by proxy backend: %s",
+                request_ptr->request_line.uri);
             char response_buffer[] = "<h1>404 Not Found</h1>";
             HTTPResponse *response = response_builder(404, "Not Found", response_buffer,
                                                       sizeof(response_buffer), "text/html");
@@ -383,25 +493,13 @@ HTTPResponse *request_handler(HTTPRequest *request_ptr)
         }
     }
 
+    LOG("DEBUG", "Request to unknown URI: %s", request_ptr->request_line.uri);
     char response_buffer[] = "<h1>404 Not Found</h1>";
     HTTPResponse *response =
         response_builder(404, "Not Found", response_buffer, sizeof(response_buffer), "text/html");
     return response;
 }
 
-/**
- * @brief   Connect to a backend server using the given host and port.
- *
- * @param   host  The hostname or IP address of the backend server.
- * @param   port  The port number of the backend server.
- *
- * @returns A file descriptor for the connected socket, or -1 on failure.
- *
- * This function takes care of resolving the hostname to an address and
- * connecting to the specified port.
- *
- * The caller is responsible for closing the socket when finished.
- */
 int connect_to_backend(const char *host, const char *port)
 {
     struct addrinfo hints, *res;
@@ -415,12 +513,14 @@ int connect_to_backend(const char *host, const char *port)
     int sock = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
     if (sock < 0)
     {
+        LOG("ERROR", "Failed to create socket while connecting to proxy backend.");
         freeaddrinfo(res);
         return -1;
     }
 
     if (connect(sock, res->ai_addr, res->ai_addrlen) != 0)
     {
+        LOG("ERROR", "Failed to connect to proxy backend.");
         freeaddrinfo(res);
         return -1;
     }
@@ -439,20 +539,6 @@ void *get_in_addr(struct sockaddr *sa)
     return &(((struct sockaddr_in6 *)sa)->sin6_addr);
 }
 
-/**
- * @brief   Constructor for the HTTPServer struct, setting up a server and HTTP
- *          request handler.
- *
- * @param   port  The port number to listen on.
- *
- * @returns A pointer to the newly created HTTPServer struct.
- *
- * The HTTPServer struct contains a SocketServer struct, which is used to
- * configure the server and handle incoming requests. The launch method is
- * also set to launch, which is responsible for binding and listening on the
- * configured port, and then entering an infinite loop to accept and process
- * incoming requests.
- */
 HTTPServer *httpserver_constructor(int port, char *static_dir, char **proxy_backends,
                                    int backend_count)
 {
@@ -475,5 +561,6 @@ void httpserver_destructor(HTTPServer *httpserver_ptr)
         server_destructor(httpserver_ptr->server);
     }
     free(httpserver_ptr->static_dir);
+    free(httpserver_ptr->proxy_backends);
     free(httpserver_ptr);
 }

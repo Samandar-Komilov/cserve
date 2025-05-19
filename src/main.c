@@ -9,7 +9,7 @@
 #include <unistd.h>
 #include <signal.h>
 #include "common.h"
-#include "configs/config.h"
+#include "utils/config.h"
 #include "http/server.h"
 
 void handle_signal(int sig);
@@ -21,11 +21,12 @@ int main(void)
     signal(SIGINT, handle_signal);
     signal(SIGTERM, handle_signal);
     signal(SIGSEGV, handle_signal);
+    signal(SIGPIPE, SIG_IGN);
 
     Config *cfg = parse_config("cserver.ini");
     if (!cfg)
     {
-        perror("Failed to parse config file.\n");
+        LOG("ERROR", "Failed to parse config file.");
         return EXIT_FAILURE;
     }
 
@@ -33,14 +34,14 @@ int main(void)
         httpserver_constructor(cfg->port, cfg->static_dir, cfg->backends, cfg->backend_count);
     if (!httpserver_ptr)
     {
-        fprintf(stderr, "Failed to create HTTPServer instance.\n");
+        LOG("ERROR", "Failed to create HTTPServer instance.");
         return EXIT_FAILURE;
     }
 
     int is_launched = httpserver_ptr->launch(httpserver_ptr);
     if (is_launched < 0)
     {
-        fprintf(stderr, "HTTPServer launch function faced an error, with code %d.\n", is_launched);
+        LOG("ERROR", "HTTPServer launch function faced an error, with code %d.", is_launched);
         httpserver_destructor(httpserver_ptr);
         return EXIT_FAILURE;
     }
@@ -76,7 +77,7 @@ void handle_signal(int sig)
         httpserver_ptr = NULL;
     }
 
-    exit(EXIT_FAILURE); // Non-zero to indicate abnormal termination
+    exit(EXIT_FAILURE);
 }
 
 void init_config(void) {}

@@ -1,16 +1,52 @@
-/**
- * @file    request.c
- * @author  Samandar Komil
- * @date    26 April 2025
- * @brief   HTTP request parser implementations
- *
- */
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <ctype.h>
 
-#include "parsers.h"
+#define MAX_METHOD 16
+#define MAX_URI 2048
+#define MAX_PROTOCOL 32
+#define MAX_HEADER_NAME 256
+#define MAX_HEADER_VALUE 4096
+#define MAX_HEADERS 100
+
+// -------- Structs
+
+typedef struct HTTPRequestLine
+{
+    char *method;
+    char *uri;
+    char *protocol;
+    size_t method_len;
+    size_t uri_len;
+    size_t protocol_len;
+} HTTPRequestLine;
+
+typedef struct HTTPHeader
+{
+    char *name;
+    char *value;
+    size_t name_len;
+    size_t value_len;
+
+} HTTPHeader;
+
+typedef struct HTTPRequest
+{
+    HTTPRequestLine request_line;
+    HTTPHeader headers[MAX_HEADERS];
+    int header_count;
+    char *body;
+    size_t body_len;
+} HTTPRequest;
+
+// ------- Methods
 
 int parse_request_line(HTTPRequest *req_t, const char *reqstr, size_t len)
 {
     if (!req_t || !reqstr) return -1;
+    printf("Req parser is working.\n");
+    printf("%s\n", reqstr);
 
     // Putting pointers at start and end of the incoming string
     const char *ptr = reqstr;
@@ -36,8 +72,6 @@ int parse_request_line(HTTPRequest *req_t, const char *reqstr, size_t len)
     req_t->request_line.protocol     = (char *)ptr;
     req_t->request_line.protocol_len = crlf - ptr;
     ptr                              = crlf + 2;
-
-    LOG("DEBUG", "Request line parsed: %.*s", req_t->request_line.uri_len, req_t->request_line.uri);
 
     return ptr - reqstr;
 }
@@ -65,8 +99,6 @@ int parse_header(HTTPHeader *header, const char *line, size_t len)
     header->value_len = crlf - ptr;
     ptr               = crlf + 2;
 
-    LOG("DEBUG", "Header parsed: %.*s", header->name_len, header->name);
-
     return ptr - line;
 }
 
@@ -74,7 +106,7 @@ int parse_http_request(const char *data, size_t len, HTTPRequest *req)
 {
     const char *ptr = data;
     const char *end = data + len;
-    int consumed    = 0;
+    int consumed;
 
     consumed = parse_request_line(req, ptr, end - ptr);
     if (consumed < 0) return -1;
@@ -97,8 +129,6 @@ int parse_http_request(const char *data, size_t len, HTTPRequest *req)
     req->body     = (char *)ptr;
     req->body_len = end - ptr;
 
-    LOG("DEBUG", "HTTP request parsed.");
-
     return 0;
 }
 
@@ -118,23 +148,24 @@ void print_request(const HTTPRequest *req)
     }
 }
 
-const char *get_mime_type(const char *filepath)
+// ------------------------------------------------------------
+
+int main(void)
 {
-    const char *ext = strrchr(filepath, '.');
-    if (!ext) return "application/octet-stream";
+    const char *request = "GET /index.html HTTP/1.1\r\n"
+                          "Host: example.com\r\n"
+                          "Content-Length: 13\r\n"
+                          "\r\n"
+                          "Hello, World!";
+    HTTPRequest req     = {0};
 
-    ext++; // skip the dot
-    if (strcmp(ext, "html") == 0) return "text/html";
-    if (strcmp(ext, "css") == 0) return "text/css";
-    if (strcmp(ext, "js") == 0) return "application/javascript";
-    if (strcmp(ext, "png") == 0) return "image/png";
-    if (strcmp(ext, "jpg") == 0) return "image/jpeg";
-    if (strcmp(ext, "jpeg") == 0) return "image/jpeg";
-    if (strcmp(ext, "gif") == 0) return "image/gif";
-    if (strcmp(ext, "svg") == 0) return "image/svg+xml";
-    if (strcmp(ext, "ico") == 0) return "image/x-icon";
-    if (strcmp(ext, "json") == 0) return "application/json";
-    if (strcmp(ext, "pdf") == 0) return "application/pdf";
-
-    return "application/octet-stream";
+    if (parse_http_request(request, strlen(request), &req) == 0)
+    {
+        print_request(&req);
+    }
+    else
+    {
+        printf("Parsing failed\n");
+    }
+    return 0;
 }
