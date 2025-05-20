@@ -26,7 +26,6 @@ int launch(HTTPServer *self)
     self->epoll_fd = epoll_create1(0);
     if (self->epoll_fd == -1)
     {
-        fprintf(stderr, "[ERROR] epoll_create1() call");
         LOG("ERROR", "Failed to initialize epoll instance.");
         exit(1);
     }
@@ -99,19 +98,13 @@ int launch(HTTPServer *self)
                 }
 
                 // Initialize a connection
-                conn->socket = client_fd;
-                conn->buffer = (char *)malloc(INITIAL_BUFFER_SIZE);
-                if (!conn->buffer)
+
+                if (init_connection(conn, client_fd, self->epoll_fd) < 0)
                 {
-                    LOG("ERROR", "Failed to allocate memory for connection buffer.");
+                    LOG("ERROR", "Failed to initialize a connection.");
                     close(client_fd);
                     continue;
                 }
-                conn->buffer_size  = INITIAL_BUFFER_SIZE;
-                conn->len          = 0;
-                conn->parsed_bytes = 0;
-                conn->state        = PARSE_REQUEST_LINE;
-                memset(&conn->request, 0, sizeof(HTTPRequest));
                 self->active_count++;
 
                 // Set socket nonblocking
@@ -151,21 +144,21 @@ int launch(HTTPServer *self)
                 // Read data in loop (considering partial reads)
                 while (1)
                 {
-                    LOG("WARNING", "Implement buffer reallocation if needed while reading data.");
+                    LOG("WARNING", "Check if buffer reallocation is working correctly.");
                     // TODO: Check if buffer is full
-                    // if (conn->len >= conn->buffer_size)
-                    // {
-                    //     size_t new_size  = conn->buffer_size * 2;
-                    //     char *new_buffer = realloc(conn->buffer, new_size);
-                    //     if (!new_buffer)
-                    //     {
-                    //         fprintf(stderr, "[ERROR] realloc buffer for FD %d\n", client_fd);
-                    //         conn->state = PARSE_ERROR;
-                    //         break;
-                    //     }
-                    //     conn->buffer      = new_buffer;
-                    //     conn->buffer_size = new_size;
-                    // }
+                    if (conn->len >= conn->buffer_size)
+                    {
+                        size_t new_size  = conn->buffer_size * 2;
+                        char *new_buffer = realloc(conn->buffer, new_size);
+                        if (!new_buffer)
+                        {
+                            LOG("ERROR", "Failed to reallocate buffer for FD %d.", client_fd);
+                            conn->state = PARSE_ERROR;
+                            break;
+                        }
+                        conn->buffer      = new_buffer;
+                        conn->buffer_size = new_size;
+                    }
 
                     int bytes_read =
                         recv(client_fd, conn->buffer + conn->len, conn->buffer_size - conn->len, 0);
@@ -209,13 +202,11 @@ int launch(HTTPServer *self)
                 }
                 conn->buffer[conn->len] = '\0';
 
-                LOG("DEBUG", "FD %d, Len: %d", client_fd, (int)conn->len);
-
                 // Parse request if data available
                 if (conn->len > conn->parsed_bytes && conn->state != PARSE_DONE)
                 {
-                    HTTPRequest *req = create_http_request();
-                    int consumed     = parse_http_request(conn->buffer, conn->len, req);
+                    // HTTPRequest *req = create_http_request();
+                    int consumed = parse_http_request(conn->buffer, conn->len, &conn->request);
                     if (consumed < 0)
                     {
                         LOG("ERROR", "Failed to parse HTTP request.");
@@ -224,7 +215,6 @@ int launch(HTTPServer *self)
                     else
                     {
                         LOG("DEBUG", "Successfully parsed HTTP request.");
-                        conn->request      = *req;
                         conn->state        = PARSE_DONE;
                         conn->parsed_bytes = conn->len;
                     }
@@ -276,6 +266,19 @@ int launch(HTTPServer *self)
                     }
                 }
 
+                if (conn->state == PARSE_ERROR)
+                {
+                    const char *error_response =
+                        "HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\n\r\n";
+                    send(client_fd, error_response, strlen(error_response), 0);
+
+                    free_connection(conn, client_fd, self->epoll_fd);
+                    self->active_count--;
+
+                    LOG("ERROR", "Connection with client FD %d closed due to parse error.",
+                        client_fd);
+                }
+
                 // Check for keep-alive
                 int keep_alive = 0;
                 for (int j = 0; j < conn->request.header_count; j++)
@@ -293,41 +296,17 @@ int launch(HTTPServer *self)
                 if (keep_alive)
                 {
                     // Reset for next request
-                    conn->len          = 0;
-                    conn->parsed_bytes = 0;
-                    conn->state        = PARSE_REQUEST_LINE;
-                    memset(&conn->request, 0, sizeof(HTTPRequest));
+                    reset_connection(conn);
                     LOG("DEBUG", "Connection is keep-alive for client FD %d", client_fd);
                 }
                 else
                 {
-                    LOG("DEBUG", "Connection is not keep-alive for client FD %d", client_fd);
-                    conn->state = PARSE_REQUEST_LINE; // Close connection
-                    epoll_ctl(self->epoll_fd, EPOLL_CTL_DEL, client_fd, NULL);
-                    close(client_fd);
-                    free(conn->buffer);
-                    free_http_request(&conn->request);
-                    conn->buffer = NULL;
-                    conn->socket = 0;
-                    self->active_count--;
-                }
-
-                if (conn->state == PARSE_ERROR)
-                {
-                    const char *error_response =
-                        "HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\n\r\n";
-                    send(client_fd, error_response, strlen(error_response), 0);
-
-                    epoll_ctl(self->epoll_fd, EPOLL_CTL_DEL, client_fd, NULL);
-                    close(client_fd);
-                    free(conn->buffer);
-                    free_http_request(&conn->request);
-                    conn->buffer = NULL;
-                    conn->socket = 0;
-                    self->active_count--;
-
-                    LOG("ERROR", "Connection with client FD %d closed due to parse error.",
+                    // Close connection
+                    LOG("DEBUG",
+                        "Connection is not keep-alive for client FD %d, closing connection...",
                         client_fd);
+                    free_connection(conn, client_fd, self->epoll_fd);
+                    self->active_count--;
                 }
             }
         }
@@ -498,6 +477,73 @@ HTTPResponse *request_handler(HTTPRequest *request_ptr)
     HTTPResponse *response =
         response_builder(404, "Not Found", response_buffer, sizeof(response_buffer), "text/html");
     return response;
+}
+
+// ---------- UTILS ----------
+
+int init_connection(Connection *conn, int client_fd, int epoll_fd)
+{
+    if (!conn || client_fd < 0 || epoll_fd < 0) return -1;
+
+    conn->socket = client_fd;
+    conn->buffer = (char *)calloc(INITIAL_BUFFER_SIZE, sizeof(char));
+    if (!conn->buffer) return -1;
+
+    conn->buffer_size  = INITIAL_BUFFER_SIZE;
+    conn->len          = 0;
+    conn->parsed_bytes = 0;
+    conn->state        = PARSE_REQUEST_LINE;
+
+    // Initialize HTTPRequest
+    memset(&conn->request, 0, sizeof(HTTPRequest));
+    conn->request.headers = malloc(MAX_HEADERS * sizeof(HTTPHeader));
+    if (!conn->request.headers)
+    {
+        free(conn->buffer);
+        return -1;
+    }
+    conn->request.header_count = 0;
+    conn->request.body         = NULL;
+    conn->request.body_len     = 0;
+
+    return 0;
+}
+
+int free_connection(Connection *conn, int client_fd, int epoll_fd)
+{
+    if (!conn || client_fd < 0 || epoll_fd < 0) return -1;
+
+    if (conn->socket > 0)
+    {
+        epoll_ctl(epoll_fd, EPOLL_CTL_DEL, conn->socket, NULL);
+        close(conn->socket);
+        conn->socket = 0;
+    }
+
+    if (conn->buffer)
+    {
+        free(conn->buffer);
+        conn->buffer = NULL;
+    }
+
+    free_http_request(&conn->request); // Must free headers, body, etc.
+
+    conn->buffer_size  = 0;
+    conn->len          = 0;
+    conn->parsed_bytes = 0;
+    conn->state        = PARSE_REQUEST_LINE;
+
+    return OK;
+}
+
+int reset_connection(Connection *conn)
+{
+    memset(conn->buffer, 0, conn->buffer_size);
+    conn->len          = 0;
+    conn->parsed_bytes = 0;
+    conn->state        = PARSE_REQUEST_LINE;
+
+    return OK;
 }
 
 int connect_to_backend(const char *host, const char *port)
