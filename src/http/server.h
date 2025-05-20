@@ -25,6 +25,10 @@ typedef struct Connection
     HTTPRequest request; // parsed request
 } Connection;
 
+int init_connection(Connection *conn, int client_fd, int epoll_fd);
+int free_connection(Connection *conn, int client_fd, int epoll_fd);
+int reset_connection(Connection *conn);
+
 typedef struct HTTPServer
 {
     SocketServer *server;
