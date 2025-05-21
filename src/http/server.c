@@ -147,13 +147,18 @@ int launch(HTTPServer *self)
                 {
                     int bytes_read = recv(client_fd, conn->buffer + conn->buffer_len,
                                           conn->buffer_size - conn->buffer_len, 0);
+
+                    printf("recv(%d, conn->buffer + %ld, %ld, 0);\n", client_fd, conn->buffer_len,
+                           conn->buffer_size - conn->buffer_len);
+                    printf("Buffer: %s\n", conn->buffer);
+
                     conn->buffer[conn->buffer_len + bytes_read] = '\0';
-                    printf("=========== Buffer: %s\n", conn->buffer);
                     if (bytes_read < 0)
                     {
                         if (errno == EAGAIN || errno == EWOULDBLOCK)
                         {
                             // No more data for now. Socket is still open
+                            LOG("DEBUG", "EAGAIN || EWOULDBLOCK - No more data for now.");
                             break;
                         }
                         else
@@ -168,21 +173,25 @@ int launch(HTTPServer *self)
                     else if (bytes_read == 0)
                     {
                         // Client intentionally closed the connection
-                        LOG("INFO", "Client FD %d closed connection (EOF)", client_fd);
+                        LOG("INFO", "Client FD %d intentionally closed connection (EOF)",
+                            client_fd);
                         conn->state = CONN_CLOSING;
 
                         if (conn->buffer_len > 0)
                         {
                             // If we read something to buffer, continue processing
+                            LOG("DEBUG", "Client sent partial request and disconnected.");
                             break;
                         }
                         else
                         {
                             // Otherwise, Client just connected, and disconnected without sending
                             // anything - close connection
-                            free_connection(conn, client_fd, self->epoll_fd);
-                            self->active_count--;
-                            continue;
+                            LOG("DEBUG", "Client disconnected without sending anything.");
+                            conn->state = CONN_CLOSING;
+                            // free_connection(conn, client_fd, self->epoll_fd);
+                            // self->active_count--;
+                            break;
                         }
                         break;
                     }
@@ -205,107 +214,124 @@ int launch(HTTPServer *self)
                             }
                             conn->buffer      = new_buffer;
                             conn->buffer_size = new_size;
+                            LOG("DEBUG", "Buffer size increased to %ld", new_size);
                         }
                     }
                 }
 
-                // Initialize HTTPRequest for current request
-                if (conn->curr_request == NULL)
+                if (conn->state != CONN_CLOSING || conn->state != CONN_ERROR)
                 {
-                    conn->curr_request = create_http_request();
-                }
-                conn->state = CONN_PROCESSING;
+                    // Initialize HTTPRequest for current request
+                    if (conn->curr_request == NULL)
+                    {
+                        conn->curr_request = create_http_request();
+                    }
+                    conn->state = CONN_PROCESSING;
+                    printf("New request initialized, connection state - PROCESSING.\n");
 
-                // Parse request if data available
-                if (conn->curr_request->state != REQ_PARSE_DONE)
-                {
-                    int consumed =
-                        parse_http_request(conn->buffer, conn->buffer_len, conn->curr_request);
-                    if (consumed < 0)
+                    // Parse request if data available
+                    if (conn->curr_request->state != REQ_PARSE_DONE)
                     {
-                        LOG("ERROR", "Failed to parse HTTP request.");
-                        conn->curr_request->state = REQ_HANDLE_ERROR;
-                    }
-                    else
-                    {
-                        LOG("DEBUG", "Successfully parsed HTTP request.");
-                        conn->curr_request->state = REQ_HANDLE_ERROR;
-                    }
-                }
-                // Handle request if fully parsed
-                else if (conn->curr_request->state == REQ_PARSE_DONE)
-                {
-                    LOG("DEBUG", "Fully parsed HTTP request below:");
-                    // print_request(&conn->request);
-
-                    HTTPResponse *response = request_handler(conn->curr_request);
-                    if (!response)
-                    {
-                        LOG("ERROR", "Failed to handle HTTP request (no response generated).");
-                        conn->curr_request->state = REQ_HANDLE_ERROR;
-                    }
-                    else
-                    {
-                        size_t response_len;
-                        char *response_str = httpresponse_serialize(response, &response_len);
-                        httpresponse_free(response);
-                        if (!response_str)
+                        int consumed =
+                            parse_http_request(conn->buffer, conn->buffer_len, conn->curr_request);
+                        printf("Is request parsed: %d\n", consumed);
+                        if (consumed < 0)
                         {
-                            LOG("ERROR", "Failed to serialize HTTP response.");
+                            LOG("ERROR", "Failed to parse HTTP request.");
                             conn->curr_request->state = REQ_HANDLE_ERROR;
                         }
                         else
                         {
-                            // Send response
-                            conn->state       = CONN_SENDING_RESPONSE;
-                            size_t total_sent = 0;
-                            while (total_sent < response_len)
-                            {
-                                int bytes_sent = send(client_fd, response_str + total_sent,
-                                                      response_len - total_sent, 0);
-                                if (bytes_sent <= 0)
-                                {
-                                    LOG("ERROR", "Error while sending response to client socket.");
-                                    break;
-                                }
-                                total_sent += bytes_sent;
-                            }
-
-                            LOG("DEBUG", "Sent %ld bytes response to client FD %d.", total_sent,
-                                client_fd);
+                            LOG("DEBUG", "Successfully parsed HTTP request.");
+                            conn->curr_request->state = REQ_PARSE_DONE;
                         }
-                        // LOG("DEBUG", "Response string: %s", response_str);
-                        free(response_str);
                     }
-                }
-
-                // Check for keep-alive
-                int keep_alive = 0;
-                for (int j = 0; j < conn->curr_request->header_count; j++)
-                {
-                    if (strncmp(conn->curr_request->headers[j].name, "Connection",
-                                conn->curr_request->headers[j].name_len) == 0 &&
-                        strncmp(conn->curr_request->headers[j].value, "keep-alive",
-                                conn->curr_request->headers[j].value_len) == 0)
+                    // Handle request if fully parsed
+                    if (conn->curr_request->state == REQ_PARSE_DONE)
                     {
-                        keep_alive = 1;
-                        break;
+                        printf("Request state: PARSE_DONE\n");
+                        LOG("DEBUG", "Fully parsed HTTP request below:");
+                        // print_request(&conn->request);
+
+                        HTTPResponse *response = request_handler(conn->curr_request);
+                        if (!response)
+                        {
+                            LOG("ERROR", "Failed to handle HTTP request (no response generated).");
+                            conn->curr_request->state = REQ_HANDLE_ERROR;
+                        }
+                        else
+                        {
+                            size_t response_len;
+                            char *response_str = httpresponse_serialize(response, &response_len);
+                            httpresponse_free(response);
+                            if (!response_str)
+                            {
+                                LOG("ERROR", "Failed to serialize HTTP response.");
+                                conn->curr_request->state = REQ_HANDLE_ERROR;
+                            }
+                            else
+                            {
+                                // Send response
+                                conn->state       = CONN_SENDING_RESPONSE;
+                                size_t total_sent = 0;
+                                while (total_sent < response_len)
+                                {
+                                    int bytes_sent = send(client_fd, response_str + total_sent,
+                                                          response_len - total_sent, 0);
+                                    if (bytes_sent <= 0)
+                                    {
+                                        LOG("ERROR",
+                                            "Error while sending response to client socket.");
+                                        break;
+                                    }
+                                    total_sent += bytes_sent;
+                                }
+
+                                LOG("DEBUG", "Sent %ld bytes response to client FD %d.", total_sent,
+                                    client_fd);
+                            }
+                            // LOG("DEBUG", "Response string: %s", response_str);
+                            free(response_str);
+                        }
+                    }
+
+                    // Check for keep-alive
+                    int keep_alive = 0;
+                    for (int j = 0; j < conn->curr_request->header_count; j++)
+                    {
+                        if (strncmp(conn->curr_request->headers[j].name, "Connection",
+                                    conn->curr_request->headers[j].name_len) == 0 &&
+                            strncmp(conn->curr_request->headers[j].value, "keep-alive",
+                                    conn->curr_request->headers[j].value_len) == 0)
+                        {
+                            keep_alive = 1;
+                            break;
+                        }
+                    }
+
+                    if (keep_alive)
+                    {
+                        // Reset for next request
+                        reset_connection(conn);
+                        LOG("DEBUG", "Connection is keep-alive for client FD %d", client_fd);
+                    }
+                    else
+                    {
+                        // Close connection
+                        LOG("DEBUG",
+                            "Connection is not keep-alive for client FD %d, closing connection...",
+                            client_fd);
+                        conn->state = CONN_CLOSING;
                     }
                 }
 
-                if (keep_alive)
+                if (conn->state == CONN_CLOSING || conn->state == CONN_ERROR)
                 {
-                    // Reset for next request
-                    reset_connection(conn);
-                    LOG("DEBUG", "Connection is keep-alive for client FD %d", client_fd);
-                }
-                else
-                {
-                    // Close connection
-                    LOG("DEBUG",
-                        "Connection is not keep-alive for client FD %d, closing connection...",
-                        client_fd);
+                    LOG("DEBUG", "Connection is closing for client FD %d", client_fd);
+                    if (conn->curr_request != NULL) free_http_request(conn->curr_request);
                     free_connection(conn, client_fd, self->epoll_fd);
+                    epoll_ctl(self->epoll_fd, EPOLL_CTL_DEL, client_fd, NULL);
+                    close(client_fd);
                     self->active_count--;
                 }
             }
@@ -423,7 +449,7 @@ HTTPResponse *request_handler(HTTPRequest *request_ptr)
             // Then, append the request body to the proxy_request string
             strncat(proxy_request, request_ptr->body, request_ptr->body_len);
 
-            int backend_fd = connect_to_backend("localhost", "8000");
+            int backend_fd = connect_to_backend("localhost", "8002");
             if (backend_fd == -1)
             {
                 LOG("ERROR", "Failed to connect to backend.");
