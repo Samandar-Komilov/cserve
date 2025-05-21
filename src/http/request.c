@@ -25,6 +25,8 @@ HTTPRequest *create_http_request(void)
     req->body     = NULL;
     req->body_len = 0;
 
+    req->state = REQ_PARSE_LINE;
+
     return req;
 }
 
