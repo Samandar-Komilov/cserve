@@ -37,19 +37,21 @@ typedef struct HTTPServer
     Connection *connections;
     size_t active_count;
     int epoll_fd;
-
-    char *static_dir;
-    char **proxy_backends;
-    int backend_count;
+    int is_running;
+    struct epoll_event events[MAX_EPOLL_EVENTS];
 
     int (*launch)(struct HTTPServer *self);
 } HTTPServer;
 
+HTTPServer *httpserver_init(int port);
+int httpserver_setup(HTTPServer *httpserver_ptr);
+void httpserver_cleanup(HTTPServer *httpserver_ptr);
+
+static int set_nonblocking(int fd);
+static int optimize_server_socket(int fd);
+
+int handle_new_connection(HTTPServer *server_ptr);
 HTTPResponse *request_handler(HTTPRequest *request_ptr);
 int connect_to_backend(const char *host, const char *port);
-
-HTTPServer *httpserver_constructor(int port, char *static_dir, char **proxy_backends,
-                                   int backend_count);
-void httpserver_destructor(HTTPServer *httpserver_ptr);
 
 #endif
