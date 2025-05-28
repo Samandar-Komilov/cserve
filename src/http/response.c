@@ -44,13 +44,6 @@ void httpresponse_free(HTTPResponse *res)
     free(res);
 }
 
-/**
- * @brief Helper functions:
- * - Dynamically Add Headers with realloc()
- * - Serialize HTTPResponse to raw string
- *
- */
-
 int httpresponse_add_header(HTTPResponse *res, const char *key, const char *value)
 {
     if (!res || !key || !value) return -1;
@@ -71,20 +64,6 @@ int httpresponse_add_header(HTTPResponse *res, const char *key, const char *valu
     return OK;
 }
 
-/**
- * @brief   Serialize an HTTPResponse struct to a raw string.
- *
- * This function takes an HTTPResponse struct and allocates a new string buffer
- * to contain its serialized form. The caller is responsible for freeing the
- * allocated memory.
- *
- * @param   res  The HTTPResponse struct to serialize.
- * @param   out_len  A pointer to a size_t to store the length of the serialized
- *                   string.
- *
- * @returns A pointer to the serialized string. NULL if memory allocation fails.
- *
- */
 char *httpresponse_serialize(HTTPResponse *res, size_t *out_len)
 {
     if (!res || !out_len) return NULL;
