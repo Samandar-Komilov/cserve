@@ -10,45 +10,16 @@
 
 int launch(HTTPServer *self)
 {
-    char s[INET6_ADDRSTRLEN];
 
-    if (bind(self->server->socket, (struct sockaddr *)&self->server->address,
-             sizeof(self->server->address)) < 0)
+    if (httpserver_setup(self) != OK)
     {
-        return SOCKET_BIND_ERROR;
-    }
-    if ((listen(self->server->socket, self->server->queue)) < 0)
-    {
-        return SOCKET_LISTEN_ERROR;
-    }
-
-    // Initialize epoll
-    self->epoll_fd = epoll_create1(0);
-    if (self->epoll_fd == -1)
-    {
-        LOG("ERROR", "Failed to initialize epoll instance.");
-        exit(1);
-    }
-
-    // Initialize connections
-    self->connections = calloc(MAX_CONNECTIONS, sizeof(Connection));
-    if (!self->connections)
-    {
-        LOG("ERROR", "Failed to allocate memory for connections.");
-        close(self->epoll_fd);
+        LOG("ERROR", "Failed to setup HTTPServer: %s", strerror(errno));
         return -1;
     }
-    self->active_count = 0;
 
-    // Add server socket to epoll
-    struct epoll_event ev, events[MAX_EPOLL_EVENTS];
-    ev.events  = EPOLLIN;
-    ev.data.fd = self->server->socket;
-    if (epoll_ctl(self->epoll_fd, EPOLL_CTL_ADD, self->server->socket, &ev) == -1)
+    if (server_socket_epoll_add(self) != OK)
     {
-        close(self->epoll_fd);
-        close(self->server->socket);
-        LOG("ERROR", "Failed to add server socket to epoll event loop.");
+        LOG("ERROR", "Failed to add server socket to epoll event loop: %s", strerror(errno));
         return -1;
     }
 
@@ -56,7 +27,7 @@ int launch(HTTPServer *self)
 
     while (1)
     {
-        int n_ready = epoll_wait(self->epoll_fd, events, MAX_EPOLL_EVENTS, 60);
+        int n_ready = epoll_wait(self->epoll_fd, self->events, MAX_EPOLL_EVENTS, 60);
         if (n_ready == -1)
         {
             LOG("ERROR", "Failed to wait for epoll events.");
@@ -65,20 +36,10 @@ int launch(HTTPServer *self)
 
         for (int i = 0; i < n_ready; i++)
         {
-            if (events[i].data.fd == self->server->socket)
+            if (self->events[i].data.fd == self->server->socket)
             {
                 // Accept a new connection
-                struct sockaddr_in client_addr;
-                socklen_t client_len = sizeof(client_addr);
-
-                int client_fd =
-                    accept(self->server->socket, (struct sockaddr *)&client_addr, &client_len);
-                if (client_fd == -1)
-                {
-                    LOG("ERROR", "Failed to accept a new connection.");
-                    close(client_fd);
-                    continue;
-                }
+                int client_fd = handle_new_connection(self);
 
                 // Find free connection slot from connections pool
                 Connection *conn = NULL;
@@ -106,40 +67,14 @@ int launch(HTTPServer *self)
                     continue;
                 }
                 self->active_count++;
-                // --------------------
 
-                // Set socket nonblocking
-                int flags = fcntl(client_fd, F_GETFL, 0);
-                if (flags == -1 || fcntl(client_fd, F_SETFL, flags | O_NONBLOCK))
-                {
-                    LOG("ERROR", "Failed to set socket nonblocking.");
-                    free(conn->buffer);
-                    close(client_fd);
-                    conn->socket = 0;
-                    self->active_count--;
-                    continue;
-                }
-
-                // Add to epoll
-                ev.events   = EPOLLIN;
-                ev.data.ptr = conn;
-                if (epoll_ctl(self->epoll_fd, EPOLL_CTL_ADD, client_fd, &ev) == -1)
-                {
-                    LOG("ERROR", "Failed to add client socket to epoll event loop.");
-                    free(conn->buffer);
-                    close(client_fd);
-                    conn->socket = 0;
-                    self->active_count--;
-                    continue;
-                }
-
-                inet_ntop(AF_INET, &client_addr.sin_addr, s, sizeof(s));
-                LOG("INFO", "Connected: %s:%d, FD: %d", s, ntohs(client_addr.sin_port), client_fd);
+                LOG("INFO", "Connected to client on port %d, FD: %d",
+                    ntohs(self->server->address.sin_port), client_fd);
             }
             else
             {
                 // Handle client data
-                Connection *conn = (Connection *)events[i].data.ptr;
+                Connection *conn = (Connection *)self->events[i].data.ptr;
                 int client_fd    = conn->socket;
 
                 // ---------------------------------
@@ -341,6 +276,139 @@ int launch(HTTPServer *self)
 
     close(self->epoll_fd);
     return 0;
+}
+
+static int set_nonblocking(int fd)
+{
+    int flags = fcntl(fd, F_GETFL, 0);
+    if (flags == -1)
+    {
+        LOG_ERROR("Failed to get socket flags: %s", strerror(errno));
+        return -1;
+    }
+
+    if (fcntl(fd, F_SETFL, flags | O_NONBLOCK) == -1)
+    {
+        LOG_ERROR("Failed to set non-blocking mode: %s", strerror(errno));
+        return -1;
+    }
+
+    return 0;
+}
+
+static int optimize_server_socket(int fd)
+{
+    int on = 1;
+
+    // Enable immediately reusing the same port once server should be restarted without waiting for
+    // timeout.
+    if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on)) == -1)
+    {
+        LOG_ERROR("Failed to set SO_REUSEADDR: %s", strerror(errno));
+        return -1;
+    }
+
+    // This option allows multiple processes to bind to the same port, as long as the bind call is
+    // made with the SO_REUSEPORT option.
+    if (setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, &on, sizeof(on)) == -1)
+    {
+        LOG_WARN("Failed to set SO_REUSEPORT (continuing anyway): %s", strerror(errno));
+    }
+
+    // This option sets the receive buffer size for the socket. A larger buffer size can improve
+    // performance by allowing the socket to handle more incoming data at once.
+    int bufsize = SOCKET_BUFFER_SIZE;
+    if (setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &bufsize, sizeof(bufsize)) == -1)
+    {
+        LOG_WARN("Failed to set SO_RCVBUF (continuing anyway): %s", strerror(errno));
+    }
+
+    // This option sets the send buffer size for the socket. Like SO_RCVBUF, a larger buffer size
+    // can improve performance by allowing the socket to handle more outgoing data at once.
+    if (setsockopt(fd, SOL_SOCKET, SO_SNDBUF, &bufsize, sizeof(bufsize)) == -1)
+    {
+        LOG_WARN("Failed to set SO_SNDBUF (continuing anyway): %s", strerror(errno));
+    }
+
+    return 0;
+}
+
+int server_socket_epoll_add(HTTPServer *self)
+{
+    struct epoll_event ev;
+    ev.events  = EPOLLIN;
+    ev.data.fd = self->server->socket;
+    if (epoll_ctl(self->epoll_fd, EPOLL_CTL_ADD, self->server->socket, &ev) == -1)
+    {
+        close(self->epoll_fd);
+        close(self->server->socket);
+        LOG("ERROR", "Failed to add server socket to epoll event loop: %s", strerror(errno));
+        return -1;
+    }
+}
+
+int handle_new_connection(HTTPServer *server_ptr)
+{
+    // Accept a new connection
+    struct sockaddr_in client_addr;
+    socklen_t client_len = sizeof(client_addr);
+    int client_fd;
+
+    while ((client_fd = accept(server_ptr->server->socket, (struct sockaddr *)&client_addr,
+                               &client_len)) != -1)
+    {
+        if (set_nonblocking(client_fd) == -1)
+        {
+            LOG("ERROR", "Failed to set non-blocking mode: %s", strerror(errno));
+            close(client_fd);
+            continue;
+        }
+
+        struct epoll_event ev;
+        ev.events  = EPOLLIN | EPOLLET;
+        ev.data.fd = client_fd;
+        if (epoll_ctl(server_ptr->epoll_fd, EPOLL_CTL_ADD, client_fd, &ev) == -1)
+        {
+            LOG("ERROR", "Failed to add client to epoll: %s", strerror(errno));
+            close(client_fd);
+            continue;
+        }
+    }
+
+    if (errno != EAGAIN && errno != EWOULDBLOCK)
+    {
+        LOG("ERROR", "Failed to accept new connection: %s", strerror(errno));
+    }
+
+    return client_fd;
+}
+
+int connection_setup() {}
+
+void handle_client_data(int client_fd)
+{
+    char buffer[BUFFER_SIZE];
+    ssize_t bytes_read;
+
+    while ((bytes_read = read(client_fd, buffer, BUFFER_SIZE - 1)) > 0)
+    {
+        buffer[bytes_read] = '\0';
+
+        const char *response = "HTTP/1.1 200 OK\r\n"
+                               "Content-Type: text/plain\r\n"
+                               "Content-Length: 12\r\n"
+                               "\r\n"
+                               "Hello World!";
+
+        write(client_fd, response, strlen(response));
+        close(client_fd);
+        return;
+    }
+
+    if (bytes_read == -1 && errno != EAGAIN && errno != EWOULDBLOCK)
+    {
+        perror("read");
+    }
 }
 
 HTTPResponse *request_handler(HTTPRequest *request_ptr)
@@ -595,28 +663,74 @@ void *get_in_addr(struct sockaddr *sa)
     return &(((struct sockaddr_in6 *)sa)->sin6_addr);
 }
 
-HTTPServer *httpserver_constructor(int port, char *static_dir, char **proxy_backends,
-                                   int backend_count)
+HTTPServer *httpserver_init(int port)
 {
     HTTPServer *httpserver_ptr = (HTTPServer *)malloc(sizeof(HTTPServer));
 
-    SocketServer *SockServer   = server_constructor(AF_INET, SOCK_STREAM, 0, INADDR_ANY, port, 10);
-    httpserver_ptr->server     = SockServer;
-    httpserver_ptr->static_dir = strdup(static_dir);
-    httpserver_ptr->proxy_backends = proxy_backends;
-    httpserver_ptr->backend_count  = backend_count;
-    httpserver_ptr->launch         = launch;
+    memset(httpserver_ptr, 0, sizeof(HTTPServer));
+    SocketServer *SockServer = server_constructor(AF_INET, SOCK_STREAM, 0, INADDR_ANY, port, 10);
+    httpserver_ptr->server   = SockServer;
+    httpserver_ptr->launch   = launch;
 
     return httpserver_ptr;
 }
 
-void httpserver_destructor(HTTPServer *httpserver_ptr)
+int httpserver_setup(HTTPServer *httpserver_ptr)
+{
+    if (httpserver_ptr->server == NULL || httpserver_ptr->server < 0)
+    {
+        LOG("ERROR", "HTTPServer is not initialized: %s", strerror(errno));
+        return -1;
+    }
+
+    if (optimize_server_socket(httpserver_ptr->server->socket) == -1)
+    {
+        LOG("ERROR", "Failed to optimize server socket: %s", strerror(errno));
+        close(httpserver_ptr->server->socket);
+        return -1;
+    }
+
+    if (bind(httpserver_ptr->server->socket, (struct sockaddr *)&httpserver_ptr->server->address,
+             sizeof(httpserver_ptr->server->address)) < 0)
+    {
+        LOG("ERROR", "Failed to bind server socket: %s", strerror(errno));
+        close(httpserver_ptr->server->socket);
+        return SOCKET_BIND_ERROR;
+    }
+
+    httpserver_ptr->is_running = 1;
+
+    if ((listen(httpserver_ptr->server->socket, httpserver_ptr->server->queue)) < 0)
+    {
+        return SOCKET_LISTEN_ERROR;
+    }
+
+    // Initialize epoll
+    httpserver_ptr->epoll_fd = epoll_create1(0);
+    if (httpserver_ptr->epoll_fd == -1)
+    {
+        LOG("ERROR", "Failed to initialize epoll instance.");
+        exit(1);
+    }
+
+    // Initialize connections
+    httpserver_ptr->connections = calloc(MAX_CONNECTIONS, sizeof(Connection));
+    if (!httpserver_ptr->connections)
+    {
+        LOG("ERROR", "Failed to allocate memory for connections.");
+        close(httpserver_ptr->epoll_fd);
+        return -1;
+    }
+    httpserver_ptr->active_count = 0;
+
+    return OK;
+}
+
+void httpserver_cleanup(HTTPServer *httpserver_ptr)
 {
     if (httpserver_ptr->server != NULL)
     {
         server_destructor(httpserver_ptr->server);
     }
-    free(httpserver_ptr->static_dir);
-    free(httpserver_ptr->proxy_backends);
     free(httpserver_ptr);
 }

@@ -34,6 +34,7 @@
 #define str(x) #x
 #define xstr(x) str(x)
 
+#define SOCKET_BUFFER_SIZE 2 * 1024 * 1024 // 2MB
 #define INITIAL_BUFFER_SIZE 4096
 #define MAX_EPOLL_EVENTS 1024
 #define MAX_CONNECTIONS 1000
