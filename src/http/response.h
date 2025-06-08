@@ -10,6 +10,7 @@
 #define HTTPRESPONSE_H
 
 #include "common.h"
+#include "request.h"
 
 typedef struct
 {
@@ -18,9 +19,9 @@ typedef struct
     char *reason_phrase;
     char **headers;
     char *body;
-    char *content_type;
     int header_count;
     int body_length;
+    char *content_type;
     int content_length;
 } HTTPResponse;
 

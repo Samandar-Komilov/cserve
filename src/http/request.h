@@ -37,9 +37,14 @@ typedef struct HTTPRequest
     char *body;
     size_t body_len;
     HTTPRequestState state;
+    HTTPMethod method_enum;
 } HTTPRequest;
 
-HTTPRequest *create_http_request();
-void free_http_request(HTTPRequest *req);
+HTTPRequest *http_request_create(void);
+void http_request_destroy(HTTPRequest *req);
+HTTPMethod http_method_from_string(const char *method_str, size_t len);
+const char *http_method_to_string(HTTPMethod method);
+bool http_request_has_header(HTTPRequest *req, const char *name);
+const char *http_request_get_header(HTTPRequest *req, const char *name);
 
 #endif

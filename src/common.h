@@ -31,52 +31,63 @@
 
 #include "utils/logger.h"
 
-#define str(x) #x
-#define xstr(x) str(x)
-
-#define SOCKET_BUFFER_SIZE 2 * 1024 * 1024 // 2MB
-#define INITIAL_BUFFER_SIZE 4096
-#define MAX_EPOLL_EVENTS 1024
+#define SOCKET_BUFFER_SIZE 2 * 1024 * 1024         // 2MB
+#define INITIAL_CONNECTION_BUFFER_SIZE 8192        // 8KB
+#define MAX_CONNECTION_BUFFER_SIZE 2 * 1024 * 1024 // 2MB
+#define CONNECTION_TIMEOUT 300                     // 5 minutes
+#define INITIAL_RESPONSE_SIZE 4096
 #define MAX_CONNECTIONS 1000
+#define MAX_EPOLL_EVENTS 1024
 #define MAX_HEADERS 50
 #define MAX_BACKENDS 16
-#define INITIAL_RESPONSE_SIZE 4096
 
-#define DEFAULT_CONFIG_PATH "/home/voidp/Projects/samandar/1lang1server/cserver"
 #define BASE_DIR "./"
 
 typedef enum
 {
-    CONN_ESTABLISHED,
-    CONN_PROCESSING,
-    CONN_SENDING_RESPONSE,
-    CONN_CLOSING,
-    CONN_ERROR
-} ConnectionState;
+    OK                  = 0,
+    ERROR_MEMORY        = -1,
+    ERROR_INVALID_PARAM = -2,
 
-typedef enum
-{
-    REQ_PARSE_LINE,
-    REQ_PARSE_HEADER,
-    REQ_PARSE_BODY,
-    REQ_PARSE_DONE,
-    REQ_HANDLE_ERROR,
-} HTTPRequestState;
-
-typedef enum
-{
-    OK = 0,
-
+    // Socket errors
     SOCKET_BIND_ERROR   = -701,
     SOCKET_LISTEN_ERROR = -702,
+    SOCKET_ACCEPT_ERROR = -703,
 
+    // HTTP parsing errors
     INVALID_REQUEST_LINE = -711,
     INVALID_METHOD       = -712,
     INVALID_PATH         = -713,
     INVALID_HEADERS      = -714,
     INVALID_REQUEST_BODY = -715,
 
+    // Connection errors
+    CONNECTION_POOL_FULL     = -721,
+    CONNECTION_TIMEOUT_ERROR = -722,
 } ErrorCode;
+
+typedef enum
+{
+    CONN_IDLE,
+    CONN_ACCEPTING,
+    CONN_READING_HEADERS,
+    CONN_READING_BODY,
+    CONN_PROCESSING_REQUEST,
+    CONN_SENDING_RESPONSE,
+    CONN_KEEP_ALIVE,
+    CONN_CLOSING,
+    CONN_ERROR,
+    CONN_CLOSED
+} ConnectionState;
+
+typedef enum
+{
+    REQ_PARSE_REQUEST_LINE,
+    REQ_PARSE_HEADERS,
+    REQ_PARSE_BODY,
+    REQ_PARSE_COMPLETE,
+    REQ_PARSE_ERROR
+} HTTPRequestState;
 
 typedef enum
 {
@@ -88,7 +99,8 @@ typedef enum
     HEAD,
     OPTIONS,
     TRACE,
-    CONNECT
+    CONNECT,
+    UNKNOWN
 } HTTPMethod;
 
 #endif // COMMON_H

@@ -8,6 +8,66 @@
 
 #include "parsers.h"
 
+int parse_http_request(const char *data, size_t len, HTTPRequest *req)
+{
+    if (!req || !data)
+    {
+        LOG("ERROR", "Req parser is not working. %p %p", req, data);
+        return -1;
+    }
+    const char *ptr = data;
+    const char *end = data + len;
+    int consumed    = 0;
+
+    consumed = parse_request_line(req, ptr, end - ptr);
+    if (consumed < 0) return -1;
+    ptr += consumed;
+
+    req->header_count = 0;
+    while (ptr < end && memcmp(ptr, "\r\n", 2) != 0)
+    {
+        if (req->header_count >= MAX_HEADERS) return -1;
+        consumed = parse_header(&req->headers[req->header_count], ptr, end - ptr);
+        if (consumed < 0) break;
+        ptr += consumed;
+        req->header_count++;
+    }
+
+    LOG("DEBUG", "Headers parsed: %d", req->header_count);
+    req->state = REQ_PARSE_COMPLETE;
+
+    // if (memcmp(ptr, "\r\n\r\n", 4) == 0)
+    // {
+    //     printf("No body present.");
+    //     req->body     = NULL;
+    //     req->body_len = 0;
+    //     return 0;
+    // }
+    // else if (ptr + 2 > end || memcmp(ptr, "\r\n", 2) != 0)
+    // {
+    //     printf("Invalid HTTP request.");
+    //     return -1;
+    // }
+    // ptr += 2;
+
+    // // Body
+    // req->body = (char *)ptr;
+    // for (int j = 0; j < req->header_count; j++)
+    // {
+    //     if (strncmp(req->headers[j].name, "Content-Length", req->headers[j].name_len) == 0)
+    //     {
+    //         req->body_len = atoi(req->headers[j].value);
+    //         break;
+    //     }
+    // }
+
+    // printf("Consumed body_len: %ld\n", req->body_len);
+
+    LOG("DEBUG", "HTTP request parsed.");
+
+    return 0;
+}
+
 int parse_request_line(HTTPRequest *req_t, const char *reqstr, size_t len)
 {
     if (!req_t || !reqstr)
@@ -16,7 +76,6 @@ int parse_request_line(HTTPRequest *req_t, const char *reqstr, size_t len)
         return -1;
     }
 
-    // Putting pointers at start and end of the incoming string
     const char *ptr = reqstr;
     const char *end = reqstr + len;
 
@@ -77,68 +136,6 @@ int parse_header(HTTPHeader *header, const char *line, size_t len)
     LOG("DEBUG", "Header parsed: %.*s", header->name_len, header->name);
 
     return ptr - line;
-}
-
-int parse_http_request(const char *data, size_t len, HTTPRequest *req)
-{
-    if (!req || !data)
-    {
-        printf("Req parser is not working. %p %p\n", req, data);
-        return -1;
-    }
-    const char *ptr = data;
-    const char *end = data + len;
-    int consumed    = 0;
-
-    consumed = parse_request_line(req, ptr, end - ptr);
-    printf("Consumed request_line: %d\n", consumed);
-    if (consumed < 0) return -1;
-    ptr += consumed;
-
-    req->header_count = 0;
-    while (ptr < end && memcmp(ptr, "\r\n", 2) != 0)
-    {
-        if (req->header_count >= MAX_HEADERS) return -1;
-        consumed = parse_header(&req->headers[req->header_count], ptr, end - ptr);
-        if (consumed < 0) break;
-        ptr += consumed;
-        req->header_count++;
-    }
-
-    printf("Consumed headers count: %d\n", req->header_count);
-
-    // printf("ptr: %s\n", ptr);
-
-    // if (memcmp(ptr, "\r\n\r\n", 4) == 0)
-    // {
-    //     printf("No body present.");
-    //     req->body     = NULL;
-    //     req->body_len = 0;
-    //     return 0;
-    // }
-    // else if (ptr + 2 > end || memcmp(ptr, "\r\n", 2) != 0)
-    // {
-    //     printf("Invalid HTTP request.");
-    //     return -1;
-    // }
-    // ptr += 2;
-
-    // // Body
-    // req->body = (char *)ptr;
-    // for (int j = 0; j < req->header_count; j++)
-    // {
-    //     if (strncmp(req->headers[j].name, "Content-Length", req->headers[j].name_len) == 0)
-    //     {
-    //         req->body_len = atoi(req->headers[j].value);
-    //         break;
-    //     }
-    // }
-
-    // printf("Consumed body_len: %ld\n", req->body_len);
-
-    LOG("DEBUG", "HTTP request parsed.");
-
-    return 0;
 }
 
 void print_request(const HTTPRequest *req)

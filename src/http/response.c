@@ -13,15 +13,13 @@ HTTPResponse *httpresponse_constructor()
     HTTPResponse *res = malloc(sizeof(HTTPResponse));
     if (!res) return NULL;
 
-    res->status_code    = 200;
-    res->version        = NULL;
-    res->reason_phrase  = NULL;
-    res->headers        = NULL;
-    res->body           = NULL;
-    res->content_type   = NULL;
-    res->header_count   = 0;
-    res->body_length    = 0;
-    res->content_length = 0;
+    res->status_code   = 200;
+    res->version       = NULL;
+    res->reason_phrase = NULL;
+    res->headers       = NULL;
+    res->body          = NULL;
+    res->header_count  = 0;
+    res->body_length   = 0;
 
     return res;
 }
@@ -29,16 +27,11 @@ HTTPResponse *httpresponse_constructor()
 void httpresponse_free(HTTPResponse *res)
 {
     if (!res) return;
-
     free(res->version);
     free(res->reason_phrase);
-
     for (int i = 0; i < res->header_count; ++i)
-    {
         free(res->headers[i]);
-    }
     free(res->headers);
-
     free(res->body);
     free(res->content_type);
     free(res);
@@ -107,25 +100,37 @@ char *httpresponse_serialize(HTTPResponse *res, size_t *out_len)
 HTTPResponse *response_builder(int status_code, const char *phrase, const char *body,
                                size_t body_length, const char *content_type)
 {
-    if (!phrase || !body || !content_type) return NULL;
     HTTPResponse *response = httpresponse_constructor();
-
-    // Ownership moves: caller frees memory
-    response->body = (char *)malloc(body_length);
-    if (!response->body)
-    {
-        httpresponse_free(response);
-        return NULL;
-    }
-
-    memset(response->body, 0, body_length);
+    if (!response) return NULL;
 
     response->status_code   = status_code;
     response->version       = strdup("HTTP/1.1");
     response->reason_phrase = strdup(phrase);
-    memcpy(response->body, body, body_length);
-    response->body_length  = body_length;
-    response->content_type = strdup(content_type);
+    response->body_length   = body_length;
+
+    if (body_length > 0 && body)
+    {
+        response->body = malloc(body_length);
+        if (!response->body)
+        {
+            httpresponse_free(response);
+            return NULL;
+        }
+        memcpy(response->body, body, body_length);
+    }
+    else
+    {
+        response->body = NULL;
+    }
+
+    if (content_type)
+    {
+        response->content_type = strdup(content_type);
+    }
+    else
+    {
+        response->content_type = NULL;
+    }
 
     return response;
 }
