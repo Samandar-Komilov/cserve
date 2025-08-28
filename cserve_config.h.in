@@ -1,0 +1,4 @@
+// the configured options and settings for Cserve
+#define Cserve_VERSION_MAJOR @Cserve_VERSION_MAJOR@
+#define Cserve_VERSION_MINOR @Cserve_VERSION_MINOR@
+#define Cserve_VERSION_PATCH @Cserve_VERSION_PATCH@

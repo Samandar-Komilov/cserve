@@ -1,4 +1,6 @@
-[CServe Logo](https://dev-to-uploads.s3.amazonaws.com/uploads/articles/1fboygzu8n1nvtw6bq6z.png)
+<p align="center">
+  <img src="https://dev-to-uploads.s3.amazonaws.com/uploads/articles/1fboygzu8n1nvtw6bq6z.png" alt="CServe Logo">
+</p>
 
 ![Static Badge](https://img.shields.io/badge/version-0.1.0-green)
 
@@ -10,8 +12,8 @@ CServe is a Nginx clone written in C. The primary purposes on building this appl
 - to understand how Nginx works
 - to learn software design and architecture
 
-!!! note
-    This project is still in progress. I wiped out the 1st phase of the project (April - June) as it was messy and hard to maintain. I will re-write the project from scratch using modern tooling, best practices and design patterns which I'm learning from Nginx source code, books like Fluent C and 21st Century C, etc.
+>[!WARNING]
+>This project is still in progress. I wiped out the 1st phase of the project (April - June) as it was messy and hard to maintain. I will re-write the project from scratch using modern tooling, best practices and design patterns which I'm learning from Nginx source code, books like Fluent C and 21st Century C, etc.
 
 # Installation
 
