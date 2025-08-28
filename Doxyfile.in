@@ -1,0 +1,61 @@
+# Doxyfile.in - Doxygen configuration template for NginxClone project
+
+# Project information
+PROJECT_NAME           = "@PROJECT_NAME@"
+PROJECT_NUMBER         = "@CServe_VERSION_MAJOR@.@CServe_VERSION_MINOR@.@CServe_VERSION_PATCH@"
+PROJECT_BRIEF          = "An Nginx Clone Project"
+PROJECT_LOGO           =
+
+# Output settings
+OUTPUT_DIRECTORY       = "@CMAKE_CURRENT_BINARY_DIR@/doc"
+CREATE_SUBDIRS         = NO
+GENERATE_HTML          = YES
+GENERATE_LATEX         = NO
+GENERATE_RTF           = NO
+GENERATE_XML           = NO
+GENERATE_MAN           = NO
+GENERATE_CHI           = NO
+GENERATE_SQL           = NO
+HTML_OUTPUT            = html
+LATEX_OUTPUT           = latex
+COMPACT_HTML           = YES
+HTML_EXTRA_STYLESHEET  =
+HTML_ALIGN_MEMBERS     = YES
+REFERENCED_BY_RELATION = YES
+REFERENCES_RELATION    = YES
+CLASS_DIAGRAMS         = YES
+ENABLE_PREPROCESSING   = YES
+
+# Input settings
+INPUT                  = "@CMAKE_CURRENT_SOURCE_DIR@/src" \
+                         "@CMAKE_CURRENT_SOURCE_DIR@/inc" # Add more source/include dirs as needed
+FILE_PATTERN           = *.c *.h
+RECURSIVE              = YES
+EXCLUDE_PATTERNS       =
+EXCLUDE_SYMBOLS        =
+
+# Source browsing
+SOURCE_BROWSER         = YES
+INLINE_SOURCES         = NO
+STRIP_CODE_COMMENTS    = YES
+VERBATIM_HEADERS       = YES
+
+# Preprocessor settings (important for CMake defines)
+MACRO_EXPANSION        = YES
+EXPAND_ONLY_PREDEF     = YES
+PREDEFINED             = Cserve_VERSION_MAJOR=@CServe_VERSION_MAJOR@ \
+                         Cserve_VERSION_MINOR=@CServe_VERSION_MINOR@ \
+                         Cserve_VERSION_PATCH=@CServe_VERSION_PATCH@
+
+# Miscellaneous
+EXTRACT_ALL            = YES # Extract all entities, even undocumented ones (good for initial setup)
+EXTRACT_PRIVATE        = YES
+EXTRACT_STATIC         = YES
+EXTRACT_LOCAL_METHODS  = YES
+SORT_MEMBER_DOCS       = YES
+SHORT_NAMES            = NO
+JAVADOC_AUTOBRIEF      = YES # Enable brief descriptions from the first sentence of a Javadoc-style comment
+QT_AUTOBRIEF           = NO
+MULTILINE_CPP_IS_BRIEF = NO
+INHERIT_DOCS           = YES
+SEPARATE_MEMBER_PAGES  = NO
