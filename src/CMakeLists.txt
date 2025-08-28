@@ -1,16 +1,14 @@
-cmake_minimum_required(VERSION 3.10)
-project(Cserve VERSION 0.2.0 LANGUAGES C)
-
-set(CMAKE_C_STANDARD 11)
-set(CMAKE_C_STANDARD_REQUIRED ON)
-# set(CMAKE_C_EXTENSIONS OFF)
-
-configure_file(cserve_config.h.in cserve_config.h)
-
+# Create the executable
 add_executable(cserve main.c)
 
+# Link libraries
 target_link_libraries(cserve m)
 
-target_include_directories(cserve PUBLIC
-                           "${PROJECT_BINARY_DIR}"
-                           )
+# Include directories - point to build dir for generated config
+target_include_directories(cserve PUBLIC 
+    "${CMAKE_BINARY_DIR}"          # for cserve_config.h in build dir
+    "${CMAKE_CURRENT_SOURCE_DIR}"  # for source headers in src dir
+)
+
+add_subdirectory(core)
+add_subdirectory(http)
