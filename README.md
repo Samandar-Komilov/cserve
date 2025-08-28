@@ -1,4 +1,4 @@
-[CServe Logo](https://dev-to-uploads.s3.amazonaws.com/uploads/articles/1fboygzu8n1nvtw6bq6z.png)
+![CServe Logo](https://dev-to-uploads.s3.amazonaws.com/uploads/articles/1fboygzu8n1nvtw6bq6z.png)
 
 ![Static Badge](https://img.shields.io/badge/version-0.1.0-green)
 
