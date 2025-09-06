@@ -1,43 +1,83 @@
 /**
- * @file main.c
- * @brief Main entry point for the CServe (Nginx Clone) application.
+ * @file    main.c
+ * @author  Samandar Komil
+ * @date    18 April 2025
  *
- * This file contains the main function which handles command-line arguments,
- * calculates the square root of a given number, and prints version information.
- * It demonstrates basic command-line parsing and mathematical operations.
+ * @brief   Main file to run the program.
  */
 
-#include <stdio.h>
-#include <stdlib.h> 
-#include <math.h> 
-#include <string.h> 
-#include "cserve_config.h" 
+#include <unistd.h>
+#include <signal.h>
+#include "common.h"
+#include "utils/config.h"
+#include "http/server.h"
 
-/**
- * @brief The main function for the CServe application.
- *
- * This function processes command-line arguments. If no argument is provided,
- * it prints the application version and usage instructions. Otherwise, it
- * attempts to calculate and print the square root of the first argument.
- *
- * @param argc The number of command-line arguments.
- * @param argv An array of strings containing the command-line arguments.
- * @return 0 if the program executes successfully, 1 if there's an error
- * (e.g., missing argument).
- */
-int main(int argc, char *argv[])
+void handle_signal(int sig);
+
+HTTPServer *httpserver_ptr = NULL;
+
+int main(void)
 {
-    if (argc < 2)
+    signal(SIGINT, handle_signal);
+    signal(SIGTERM, handle_signal);
+    signal(SIGSEGV, handle_signal);
+    signal(SIGPIPE, SIG_IGN);
+
+    Config *cfg = parse_config("cserver.ini");
+    if (!cfg)
     {
-        printf("%s Version %d.%d.%d\n", argv[0],
-               Cserve_VERSION_MAJOR, Cserve_VERSION_MINOR, Cserve_VERSION_PATCH);
-        printf("Usage: %s number\n", argv[0]);
-        return 1;
+        LOG("ERROR", "Failed to parse config file.");
+        return EXIT_FAILURE;
     }
 
-    double const inputValue = atof(argv[1]);
+    HTTPServer *httpserver_ptr =
+        httpserver_constructor(cfg->port, cfg->static_dir, cfg->backends, cfg->backend_count);
+    if (!httpserver_ptr)
+    {
+        LOG("ERROR", "Failed to create HTTPServer instance.");
+        return EXIT_FAILURE;
+    }
 
-    double const outputValue = sqrt(inputValue);
-    printf("The square root of %f is %f\n", inputValue, outputValue);
-    return 0;
+    int is_launched = httpserver_ptr->launch(httpserver_ptr);
+    if (is_launched < 0)
+    {
+        LOG("ERROR", "HTTPServer launch function faced an error, with code %d.", is_launched);
+        httpserver_destructor(httpserver_ptr);
+        return EXIT_FAILURE;
+    }
+
+    httpserver_destructor(httpserver_ptr);
+    free_config(cfg);
+
+    return EXIT_SUCCESS;
 }
+
+void handle_signal(int sig)
+{
+    switch (sig)
+    {
+    case SIGINT:
+        fprintf(stderr, "\n\033[31m[!] SIGINT received. Cleaning up...\033[0m\n");
+        break;
+    case SIGSEGV:
+        fprintf(
+            stderr,
+            "\n\033[31m[!] SIGSEGV received. Possible segmentation fault. Cleaning up...\033[0m\n");
+        break;
+    case SIGTERM:
+        fprintf(stderr, "\n\033[31m[!] SIGTERM received. Terminating gracefully...\033[0m\n");
+        break;
+    default:
+        fprintf(stderr, "\n\03[33m[!] Signal %d received. Cleaning up...\033[0m\n", sig);
+    }
+
+    if (httpserver_ptr)
+    {
+        httpserver_destructor(httpserver_ptr);
+        httpserver_ptr = NULL;
+    }
+
+    exit(EXIT_FAILURE);
+}
+
+void init_config(void) {}
