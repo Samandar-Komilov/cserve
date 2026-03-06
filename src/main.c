@@ -30,7 +30,7 @@ int main(void)
         return EXIT_FAILURE;
     }
 
-    HTTPServer *httpserver_ptr =
+    httpserver_ptr =
         httpserver_constructor(cfg->port, cfg->static_dir, cfg->backends, cfg->backend_count);
     if (!httpserver_ptr)
     {

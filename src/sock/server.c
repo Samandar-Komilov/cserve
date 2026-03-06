@@ -27,9 +27,9 @@ SocketServer *server_constructor(int domain, int service, int protocol, uint32_t
 
     server_ptr->socket = socket(domain, service, protocol);
 
-    if (server_ptr->socket == 0)
+    if (server_ptr->socket < 0)
     {
-        perror("Failed to connect socket...");
+        perror("Failed to create socket");
         exit(1);
     }
 

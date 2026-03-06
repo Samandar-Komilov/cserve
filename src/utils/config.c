@@ -34,8 +34,6 @@
  */
 Config *parse_config(const char *filename)
 {
-    char full_path[PATH_MAX];
-    snprintf(full_path, sizeof(full_path), "%s/%s", realpath(BASE_DIR, NULL), filename);
     FILE *f = fopen(filename, "r");
     if (!f)
     {

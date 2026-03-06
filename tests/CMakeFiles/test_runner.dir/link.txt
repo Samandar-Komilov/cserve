@@ -1,0 +1,1 @@
+/usr/bin/cc -Wl,--dependency-file=CMakeFiles/test_runner.dir/link.d CMakeFiles/test_runner.dir/test_parsers.c.o -o test_runner  ../src/libcserve_core.a

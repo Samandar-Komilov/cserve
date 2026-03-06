@@ -76,7 +76,6 @@ int launch(HTTPServer *self)
                 if (client_fd == -1)
                 {
                     LOG("ERROR", "Failed to accept a new connection.");
-                    close(client_fd);
                     continue;
                 }
 
@@ -219,7 +218,7 @@ int launch(HTTPServer *self)
                     }
                 }
 
-                if (conn->state != CONN_CLOSING || conn->state != CONN_ERROR)
+                if (conn->state != CONN_CLOSING && conn->state != CONN_ERROR)
                 {
                     // Initialize HTTPRequest for current request
                     if (conn->curr_request == NULL)
@@ -329,9 +328,9 @@ int launch(HTTPServer *self)
                 {
                     LOG("DEBUG", "Connection is closing for client FD %d", client_fd);
                     if (conn->curr_request != NULL) free_http_request(conn->curr_request);
-                    free_connection(conn, client_fd, self->epoll_fd);
                     epoll_ctl(self->epoll_fd, EPOLL_CTL_DEL, client_fd, NULL);
                     close(client_fd);
+                    free_connection(conn, client_fd, self->epoll_fd);
                     self->active_count--;
                 }
             }
@@ -353,15 +352,26 @@ HTTPResponse *request_handler(HTTPRequest *request_ptr)
         if (strncmp(request_ptr->request_line.uri, "/static", 7) == 0)
         {
             char filepath[PATH_MAX];
-            if (snprintf(filepath, sizeof(filepath), "%s%.*s", realpath(BASE_DIR, NULL),
-                         (int)request_ptr->request_line.uri_len, request_ptr->request_line.uri) < 0)
+            char *base_dir = realpath(BASE_DIR, NULL);
+            if (!base_dir)
+            {
+                LOG("ERROR", "Failed to resolve base directory.");
+                char response_buffer[] = "<h1>500 Internal Server Error</h1>";
+                return response_builder(500, "Internal Server Error", response_buffer,
+                                        sizeof(response_buffer), "text/html");
+            }
+            int snprintf_ret = snprintf(filepath, sizeof(filepath), "%s%.*s", base_dir,
+                                        (int)request_ptr->request_line.uri_len,
+                                        request_ptr->request_line.uri);
+            free(base_dir);
+            if (snprintf_ret < 0)
             {
                 LOG("ERROR", "Failed to build filepath.");
                 char response_buffer[] = "<h1>404 Not Found</h1>";
                 HTTPResponse *response = response_builder(404, "Not Found", response_buffer,
                                                           sizeof(response_buffer), "text/html");
                 return response;
-            };
+            }
 
             int fd = open(filepath, O_RDONLY);
             if (fd == -1)
@@ -378,8 +388,7 @@ HTTPResponse *request_handler(HTTPRequest *request_ptr)
             fstat(fd, &st);
             size_t filesize = st.st_size;
 
-            char *buffer = malloc(filesize);
-            memset(buffer, 0, filesize);
+            char *buffer = calloc(1, filesize);
 
             if (!buffer)
             {
@@ -531,11 +540,8 @@ int free_connection(Connection *conn, int client_fd, int epoll_fd)
 {
     if (!conn || client_fd < 0 || epoll_fd < 0) return -1;
 
-    if (conn->socket > 0)
-    {
-        close(conn->socket);
-        conn->socket = 0;
-    }
+    /* caller is responsible for close() and epoll_ctl(DEL) before calling here */
+    conn->socket = -1;
 
     if (conn->buffer)
     {
@@ -544,6 +550,7 @@ int free_connection(Connection *conn, int client_fd, int epoll_fd)
     }
 
     conn->buffer_size = 0;
+    conn->buffer_len  = 0;
 
     return OK;
 }
@@ -551,7 +558,14 @@ int free_connection(Connection *conn, int client_fd, int epoll_fd)
 int reset_connection(Connection *conn)
 {
     memset(conn->buffer, 0, conn->buffer_size);
-    conn->state = CONN_ESTABLISHED;
+    conn->buffer_len = 0;
+    conn->state      = CONN_ESTABLISHED;
+
+    if (conn->curr_request)
+    {
+        free_http_request(conn->curr_request);
+        conn->curr_request = NULL;
+    }
 
     return OK;
 }
