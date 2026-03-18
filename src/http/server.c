@@ -81,13 +81,14 @@ int launch(HTTPServer *self)
 
     LOG("INFO", "Waiting for connections on port %d", self->server->port);
 
-    while (1)
+    while (!shutdown_flag)
     {
-        int n_ready = epoll_wait(self->epoll_fd, events, MAX_EPOLL_EVENTS, 60);
+        int n_ready = epoll_wait(self->epoll_fd, events, MAX_EPOLL_EVENTS, 1000);
         if (n_ready == -1)
         {
-            LOG("ERROR", "Failed to wait for epoll events.");
-            continue;
+            if (errno == EINTR) continue; /* signal interrupted epoll_wait */
+            LOG("ERROR", "epoll_wait failed: %s", strerror(errno));
+            break;
         }
 
         for (int i = 0; i < n_ready; i++)
@@ -372,6 +373,20 @@ int launch(HTTPServer *self)
         }
         // ---------------------------------
     }
+
+    /* Clean shutdown: close all active connections */
+    for (size_t j = 0; j < MAX_CONNECTIONS; j++)
+    {
+        if (self->connections[j].socket != -1)
+        {
+            int fd = self->connections[j].socket;
+            epoll_ctl(self->epoll_fd, EPOLL_CTL_DEL, fd, NULL);
+            free_connection(&self->connections[j], fd, self->epoll_fd);
+            close(fd);
+        }
+    }
+    free(self->connections);
+    self->connections = NULL;
 
     close(self->epoll_fd);
     return 0;

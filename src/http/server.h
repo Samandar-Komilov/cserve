@@ -9,10 +9,14 @@
 #ifndef HTTPSERVER_H
 #define HTTPSERVER_H
 
+#include <signal.h>
 #include "sock/server.h"
 #include "parsers.h"
 #include "common.h"
 #include "request.h"
+
+/* SEC-04: Shutdown flag -- defined in main.c, used in server.c event loop */
+extern volatile sig_atomic_t shutdown_flag;
 
 typedef struct Connection
 {
