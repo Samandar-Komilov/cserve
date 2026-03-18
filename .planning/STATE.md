@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 01-02-PLAN.md
-last_updated: "2026-03-18T11:10:37.519Z"
+stopped_at: Completed 01-01-PLAN.md
+last_updated: "2026-03-18T11:11:10.732Z"
 last_activity: 2026-03-18 -- Completed 01-02 (fix use-after-free in HTTP parser)
 progress:
   total_phases: 9
   completed_phases: 0
   total_plans: 3
-  completed_plans: 1
+  completed_plans: 2
   percent: 33
 ---
 
@@ -51,6 +51,7 @@ Progress: [███░░░░░░░] 33%
 
 *Updated after each plan completion*
 | Phase 01 P02 | 2min | 2 tasks | 2 files |
+| Phase 01 P01 | 2min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -63,6 +64,8 @@ Recent decisions affecting current work:
 - Zero external dependencies relaxed for TLS only (OpenSSL 3.x)
 - Sequential phase execution for solo developer workflow
 - [Phase 01]: Used strndup for all buffer-extracted strings instead of raw pointer storage
+- [Phase 01]: SEC-06 strtoull deferred to Phase 3: no Content-Length atoi in server.c
+- [Phase 01]: free_connection owns curr_request cleanup; caller owns close(fd)
 
 ### Pending Todos
 
@@ -75,6 +78,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-18T11:10:37.516Z
-Stopped at: Completed 01-02-PLAN.md
+Last session: 2026-03-18T11:11:10.729Z
+Stopped at: Completed 01-01-PLAN.md
 Resume file: None
