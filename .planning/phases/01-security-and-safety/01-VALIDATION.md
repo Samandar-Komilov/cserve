@@ -38,23 +38,23 @@ created: 2026-03-18
 
 | Task ID | Plan | Wave | Requirement | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|-----------|-------------------|-------------|--------|
-| 01-01-01 | 01 | 1 | SEC-01 | smoke | `bash tests/smoke/test_path_traversal.sh` | ❌ W0 | ⬜ pending |
-| 01-01-02 | 01 | 1 | SEC-02 | smoke | `bash tests/smoke/test_buffer_overflow.sh` | ❌ W0 | ⬜ pending |
-| 01-01-03 | 01 | 1 | SEC-03 | build | `cmake --build build && valgrind ./build/cserve --help` | ✅ | ⬜ pending |
-| 01-01-04 | 01 | 1 | SEC-04 | smoke | `bash tests/smoke/test_signal_handling.sh` | ❌ W0 | ⬜ pending |
-| 01-01-05 | 01 | 1 | SEC-05 | code review | `grep -rn 'socket = -1' src/` | ✅ | ⬜ pending |
-| 01-01-06 | 01 | 1 | SEC-06 | build | `cmake --build build` (strtoull + size_t compiles clean) | ✅ | ⬜ pending |
+| 01-03-03 | 03 | 2 | SEC-01 | smoke | `bash tests/smoke/test_sec01_path_traversal.sh` | created by 01-03 Task 3 | pending |
+| 01-03-03 | 03 | 2 | SEC-02 | smoke | `bash tests/smoke/test_sec02_buffer_overflow.sh` | created by 01-03 Task 3 | pending |
+| 01-02-01 | 02 | 1 | SEC-03 | build | `cmake --build build && valgrind ./build/cserve --help` | yes | pending |
+| 01-03-03 | 03 | 2 | SEC-04 | smoke | `bash tests/smoke/test_sec04_signal.sh` | created by 01-03 Task 3 | pending |
+| 01-01-02 | 01 | 1 | SEC-05 | code review | `grep -rn 'socket = -1' src/` | yes | pending |
+| 01-01-01 | 01 | 1 | SEC-06 | build | `cmake --build build` (strtoull + size_t compiles clean) | yes | pending |
 
-*Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
+*Status: pending / green / red / flaky*
 
 ---
 
 ## Wave 0 Requirements
 
-- [ ] `tests/smoke/run_all.sh` — runner script that executes all smoke tests
-- [ ] `tests/smoke/test_path_traversal.sh` — curl-based path traversal attack attempts
-- [ ] `tests/smoke/test_buffer_overflow.sh` — oversized request/response tests
-- [ ] `tests/smoke/test_signal_handling.sh` — signal delivery and clean shutdown check
+- [ ] `tests/smoke/run_all.sh` — runner script that executes all smoke tests (created by Plan 01-03 Task 3)
+- [ ] `tests/smoke/test_sec01_path_traversal.sh` — curl-based path traversal attack attempts (created by Plan 01-03 Task 3)
+- [ ] `tests/smoke/test_sec02_buffer_overflow.sh` — oversized request/response tests (created by Plan 01-03 Task 3)
+- [ ] `tests/smoke/test_sec04_signal.sh` — signal delivery and clean shutdown check (created by Plan 01-03 Task 3)
 
 ---
 
