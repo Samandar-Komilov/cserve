@@ -34,11 +34,12 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. The HTTP parser does not hold raw pointers into the read buffer -- all parsed fields are independent copies
   4. Sending SIGTERM or SIGINT during active request handling shuts down cleanly without calling unsafe functions in the signal handler
   5. Closing a connection sets the fd to -1 and removes it from epoll before freeing -- no double-close or use-after-free possible
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 01-01: TBD
-- [ ] 01-02: TBD
+- [ ] 01-01-PLAN.md -- Foundation fixes: fd sentinel (SEC-05), Content-Length parsing (SEC-06), size limit constants, adjacent Critical/High bugs
+- [ ] 01-02-PLAN.md -- Parser use-after-free fix (SEC-03): strndup all parsed fields, update free_http_request
+- [ ] 01-03-PLAN.md -- Path traversal (SEC-01), proxy buffer overflows (SEC-02), signal handler safety (SEC-04), smoke tests
 
 ### Phase 2: Architecture and Testing
 **Goal**: The codebase is decomposed into isolated, testable modules with automated safety nets that catch regressions
@@ -176,7 +177,7 @@ Note: Phase 7 (Reverse Proxy) depends on Phase 4 (not Phase 6), so Phases 5-6 an
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Security and Safety | 0/? | Not started | - |
+| 1. Security and Safety | 0/3 | Planning complete | - |
 | 2. Architecture and Testing | 0/? | Not started | - |
 | 3. HTTP Parsing and Connection Management | 0/? | Not started | - |
 | 4. HTTP Semantics | 0/? | Not started | - |
