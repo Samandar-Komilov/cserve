@@ -8,20 +8,37 @@
 
 #include <unistd.h>
 #include <signal.h>
+#include <string.h>
 #include "common.h"
 #include "utils/config.h"
 #include "http/server.h"
 
-void handle_signal(int sig);
+/* SEC-04: Global shutdown flag -- NOT static, shared via extern in server.h */
+volatile sig_atomic_t shutdown_flag = 0;
+
+static void handle_signal(int sig)
+{
+    (void)sig;
+    shutdown_flag = 1;
+}
 
 HTTPServer *httpserver_ptr = NULL;
 
 int main(void)
 {
-    signal(SIGINT, handle_signal);
-    signal(SIGTERM, handle_signal);
-    signal(SIGSEGV, handle_signal);
+    /* SEC-04: Use sigaction instead of signal() for reliable behavior */
+    struct sigaction sa;
+    memset(&sa, 0, sizeof(sa));
+    sa.sa_handler = handle_signal;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = 0;
+    sigaction(SIGINT, &sa, NULL);
+    sigaction(SIGTERM, &sa, NULL);
+
+    /* SIGPIPE ignored -- broken pipe should not crash the server */
     signal(SIGPIPE, SIG_IGN);
+
+    /* SIGSEGV deliberately NOT caught -- crash with core dump for debugging */
 
     Config *cfg = parse_config("cserver.ini");
     if (!cfg)
@@ -50,34 +67,6 @@ int main(void)
     free_config(cfg);
 
     return EXIT_SUCCESS;
-}
-
-void handle_signal(int sig)
-{
-    switch (sig)
-    {
-    case SIGINT:
-        fprintf(stderr, "\n\033[31m[!] SIGINT received. Cleaning up...\033[0m\n");
-        break;
-    case SIGSEGV:
-        fprintf(
-            stderr,
-            "\n\033[31m[!] SIGSEGV received. Possible segmentation fault. Cleaning up...\033[0m\n");
-        break;
-    case SIGTERM:
-        fprintf(stderr, "\n\033[31m[!] SIGTERM received. Terminating gracefully...\033[0m\n");
-        break;
-    default:
-        fprintf(stderr, "\n\03[33m[!] Signal %d received. Cleaning up...\033[0m\n", sig);
-    }
-
-    if (httpserver_ptr)
-    {
-        httpserver_destructor(httpserver_ptr);
-        httpserver_ptr = NULL;
-    }
-
-    exit(EXIT_FAILURE);
 }
 
 void init_config(void) {}

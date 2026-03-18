@@ -8,6 +8,30 @@
 
 #include "server.h"
 
+/* Minimal percent-decode: decodes %XX sequences in-place.
+   Returns decoded length. Does NOT handle '+' as space. */
+static size_t percent_decode(char *dst, const char *src, size_t src_len)
+{
+    size_t j = 0;
+    for (size_t i = 0; i < src_len; i++)
+    {
+        if (src[i] == '%' && i + 2 < src_len
+            && isxdigit((unsigned char)src[i + 1])
+            && isxdigit((unsigned char)src[i + 2]))
+        {
+            char hex[3] = {src[i + 1], src[i + 2], '\0'};
+            dst[j++]    = (char)strtol(hex, NULL, 16);
+            i += 2;
+        }
+        else
+        {
+            dst[j++] = src[i];
+        }
+    }
+    dst[j] = '\0';
+    return j;
+}
+
 int launch(HTTPServer *self)
 {
     char s[INET6_ADDRSTRLEN];
@@ -38,6 +62,9 @@ int launch(HTTPServer *self)
         close(self->epoll_fd);
         return -1;
     }
+    for (size_t j = 0; j < MAX_CONNECTIONS; j++) {
+        self->connections[j].socket = -1;
+    }
     self->active_count = 0;
 
     // Add server socket to epoll
@@ -54,13 +81,14 @@ int launch(HTTPServer *self)
 
     LOG("INFO", "Waiting for connections on port %d", self->server->port);
 
-    while (1)
+    while (!shutdown_flag)
     {
-        int n_ready = epoll_wait(self->epoll_fd, events, MAX_EPOLL_EVENTS, 60);
+        int n_ready = epoll_wait(self->epoll_fd, events, MAX_EPOLL_EVENTS, 1000);
         if (n_ready == -1)
         {
-            LOG("ERROR", "Failed to wait for epoll events.");
-            continue;
+            if (errno == EINTR) continue; /* signal interrupted epoll_wait */
+            LOG("ERROR", "epoll_wait failed: %s", strerror(errno));
+            break;
         }
 
         for (int i = 0; i < n_ready; i++)
@@ -83,7 +111,7 @@ int launch(HTTPServer *self)
                 Connection *conn = NULL;
                 for (size_t j = 0; j < MAX_CONNECTIONS; j++)
                 {
-                    if (self->connections[j].socket == 0)
+                    if (self->connections[j].socket == -1)
                     {
                         conn = &self->connections[j];
                         break;
@@ -114,7 +142,7 @@ int launch(HTTPServer *self)
                     LOG("ERROR", "Failed to set socket nonblocking.");
                     free(conn->buffer);
                     close(client_fd);
-                    conn->socket = 0;
+                    conn->socket = -1;
                     self->active_count--;
                     continue;
                 }
@@ -127,7 +155,7 @@ int launch(HTTPServer *self)
                     LOG("ERROR", "Failed to add client socket to epoll event loop.");
                     free(conn->buffer);
                     close(client_fd);
-                    conn->socket = 0;
+                    conn->socket = -1;
                     self->active_count--;
                     continue;
                 }
@@ -151,7 +179,6 @@ int launch(HTTPServer *self)
                            conn->buffer_size - conn->buffer_len);
                     printf("Buffer: %s\n", conn->buffer);
 
-                    conn->buffer[conn->buffer_len + bytes_read] = '\0';
                     if (bytes_read < 0)
                     {
                         if (errno == EAGAIN || errno == EWOULDBLOCK)
@@ -198,7 +225,17 @@ int launch(HTTPServer *self)
                     {
                         // Successfully read some data
                         conn->buffer_len += bytes_read;
+                        conn->buffer[conn->buffer_len] = '\0';
                         LOG("DEBUG", "Read %d bytes from socket FD %d", bytes_read, client_fd);
+
+                        // Enforce header size limit
+                        if (conn->buffer_len > MAX_HEADER_SIZE)
+                        {
+                            LOG("ERROR", "Request headers exceed %d bytes, rejecting",
+                                MAX_HEADER_SIZE);
+                            conn->state = CONN_CLOSING;
+                            break;
+                        }
 
                         // Check if we need to grow buffer
                         if (conn->buffer_len >= conn->buffer_size)
@@ -327,16 +364,29 @@ int launch(HTTPServer *self)
                 if (conn->state == CONN_CLOSING || conn->state == CONN_ERROR)
                 {
                     LOG("DEBUG", "Connection is closing for client FD %d", client_fd);
-                    if (conn->curr_request != NULL) free_http_request(conn->curr_request);
                     epoll_ctl(self->epoll_fd, EPOLL_CTL_DEL, client_fd, NULL);
-                    close(client_fd);
                     free_connection(conn, client_fd, self->epoll_fd);
+                    close(client_fd);
                     self->active_count--;
                 }
             }
         }
         // ---------------------------------
     }
+
+    /* Clean shutdown: close all active connections */
+    for (size_t j = 0; j < MAX_CONNECTIONS; j++)
+    {
+        if (self->connections[j].socket != -1)
+        {
+            int fd = self->connections[j].socket;
+            epoll_ctl(self->epoll_fd, EPOLL_CTL_DEL, fd, NULL);
+            free_connection(&self->connections[j], fd, self->epoll_fd);
+            close(fd);
+        }
+    }
+    free(self->connections);
+    self->connections = NULL;
 
     close(self->epoll_fd);
     return 0;
@@ -351,150 +401,215 @@ HTTPResponse *request_handler(HTTPRequest *request_ptr)
     {
         if (strncmp(request_ptr->request_line.uri, "/static", 7) == 0)
         {
-            char filepath[PATH_MAX];
-            char *base_dir = realpath(BASE_DIR, NULL);
-            if (!base_dir)
+            /* SEC-01: Percent-decode the URI to catch %2e%2e traversal */
+            char decoded_uri[PATH_MAX];
+            size_t decoded_len = percent_decode(decoded_uri,
+                request_ptr->request_line.uri, request_ptr->request_line.uri_len);
+
+            /* Resolve document root */
+            char *root = realpath(BASE_DIR, NULL);
+            if (!root)
             {
-                LOG("ERROR", "Failed to resolve base directory.");
-                char response_buffer[] = "<h1>500 Internal Server Error</h1>";
-                return response_builder(500, "Internal Server Error", response_buffer,
-                                        sizeof(response_buffer), "text/html");
-            }
-            int snprintf_ret = snprintf(filepath, sizeof(filepath), "%s%.*s", base_dir,
-                                        (int)request_ptr->request_line.uri_len,
-                                        request_ptr->request_line.uri);
-            free(base_dir);
-            if (snprintf_ret < 0)
-            {
-                LOG("ERROR", "Failed to build filepath.");
-                char response_buffer[] = "<h1>404 Not Found</h1>";
-                HTTPResponse *response = response_builder(404, "Not Found", response_buffer,
-                                                          sizeof(response_buffer), "text/html");
-                return response;
+                LOG("ERROR", "Cannot resolve document root: %s", strerror(errno));
+                return response_builder(500, "Internal Server Error",
+                                        "Server misconfiguration", 22, "text/plain");
             }
 
-            int fd = open(filepath, O_RDONLY);
+            /* Build candidate path from decoded URI */
+            char filepath[PATH_MAX];
+            snprintf(filepath, sizeof(filepath), "%s%.*s", root,
+                     (int)decoded_len, decoded_uri);
+
+            /* Resolve candidate (follows symlinks, normalizes ../) */
+            char *resolved = realpath(filepath, NULL);
+            if (!resolved)
+            {
+                free(root);
+                return response_builder(404, "Not Found", "File not found", 14, "text/plain");
+            }
+
+            /* Verify resolved path starts with document root */
+            if (strncmp(resolved, root, strlen(root)) != 0)
+            {
+                LOG("ERROR", "Path traversal attempt blocked: %s", decoded_uri);
+                free(resolved);
+                free(root);
+                return response_builder(403, "Forbidden", "Access denied", 13, "text/plain");
+            }
+
+            free(root);
+
+            int fd = open(resolved, O_RDONLY);
             if (fd == -1)
             {
-                LOG("ERROR", "Failed to open file.");
-                char response_buffer[] = "<h1>404 Not Found</h1>";
-                HTTPResponse *response = response_builder(404, "Not Found", response_buffer,
-                                                          sizeof(response_buffer), "text/html");
-                return response;
+                LOG("ERROR", "Failed to open file: %s", resolved);
+                free(resolved);
+                return response_builder(404, "Not Found", "File not found", 14, "text/plain");
             }
 
-            // Get file size
+            /* Get file size */
             struct stat st;
             fstat(fd, &st);
             size_t filesize = st.st_size;
 
             char *buffer = calloc(1, filesize);
-
             if (!buffer)
             {
                 LOG("ERROR", "Failed to allocate buffer.");
                 close(fd);
-                char response_buffer[] = "<h1>Internal Server Error</h1>";
-                return response_builder(500, "Internal Server Error", response_buffer,
-                                        sizeof(response_buffer), "text/html");
+                free(resolved);
+                return response_builder(500, "Internal Server Error",
+                                        "Out of memory", 13, "text/plain");
             }
 
             size_t total_read = 0;
             while (total_read < filesize)
             {
-                size_t bytes = read(fd, buffer + total_read, filesize - total_read);
+                ssize_t bytes = read(fd, buffer + total_read, filesize - total_read);
                 if (bytes <= 0)
                 {
                     LOG("ERROR", "Failed to read file.");
                     free(buffer);
-                    char response_buffer[] = "<h1>Internal Server Error</h1>";
-                    return response_builder(500, "Internal Server Error", response_buffer,
-                                            sizeof(response_buffer), "text/html");
+                    close(fd);
+                    free(resolved);
+                    return response_builder(500, "Internal Server Error",
+                                            "Read error", 10, "text/plain");
                 }
-                total_read += bytes;
+                total_read += (size_t)bytes;
             }
 
             LOG("DEBUG", "Read %zu bytes\nActual filesize: %zu", total_read, filesize);
 
-            if (total_read != filesize)
-            {
-                LOG("ERROR", "Failed to read file.");
-                free(buffer);
-                char response_buffer[] = "<h1>Internal Server Error</h1>";
-                return response_builder(500, "Internal Server Error", response_buffer,
-                                        sizeof(response_buffer), "text/html");
-            }
-
             HTTPResponse *response =
-                response_builder(200, "OK", buffer, filesize, get_mime_type(filepath));
+                response_builder(200, "OK", buffer, filesize, get_mime_type(resolved));
 
+            free(buffer);
             close(fd);
+            free(resolved);
             return response;
         }
         else if (strncmp(request_ptr->request_line.uri, "/api", 4) == 0)
         {
-            // TODO: Reverse proxy
+            /* SEC-02: Reverse proxy with heap buffers and size caps */
             char *api_path = request_ptr->request_line.uri + strlen("/api");
             if (*api_path == '\0') api_path = "/";
 
-            char proxy_request[INITIAL_BUFFER_SIZE];
-            int proxy_request_len =
-                snprintf(proxy_request, sizeof(proxy_request),
-                         "%s %s HTTP/1.1\r\n"
-                         "Host: localhost\r\n"
-                         "Content-Length: %zu\r\n"
-                         "Connection: close\r\n"
-                         "\r\n",
-                         request_ptr->request_line.method, api_path, request_ptr->body_len);
+            /* Calculate header size first */
+            size_t header_len = (size_t)snprintf(NULL, 0,
+                "%.*s %s HTTP/1.1\r\n"
+                "Host: localhost\r\n"
+                "Content-Length: %zu\r\n"
+                "Connection: close\r\n"
+                "\r\n",
+                (int)request_ptr->request_line.method_len,
+                request_ptr->request_line.method,
+                api_path, request_ptr->body_len);
 
-            if (proxy_request_len < 0)
+            size_t total_len = header_len;
+            if (request_ptr->body && request_ptr->body_len > 0)
             {
-                LOG("ERROR", "Failed to build proxy request.");
-                char response_buffer[] = "<h1>Internal Server Error</h1>";
-                return response_builder(500, "Internal Server Error", response_buffer,
-                                        sizeof(response_buffer), "text/html");
+                total_len += request_ptr->body_len;
+            }
+            if (total_len > MAX_BODY_SIZE)
+            {
+                return response_builder(413, "Payload Too Large",
+                                        "Request too large", 17, "text/plain");
             }
 
-            // Then, append the request body to the proxy_request string
-            strncat(proxy_request, request_ptr->body, request_ptr->body_len);
+            char *proxy_request = malloc(total_len + 1);
+            if (!proxy_request)
+            {
+                return response_builder(500, "Internal Server Error",
+                                        "Out of memory", 13, "text/plain");
+            }
+
+            snprintf(proxy_request, header_len + 1,
+                "%.*s %s HTTP/1.1\r\n"
+                "Host: localhost\r\n"
+                "Content-Length: %zu\r\n"
+                "Connection: close\r\n"
+                "\r\n",
+                (int)request_ptr->request_line.method_len,
+                request_ptr->request_line.method,
+                api_path, request_ptr->body_len);
+
+            /* Append body with NULL guard */
+            if (request_ptr->body && request_ptr->body_len > 0)
+            {
+                memcpy(proxy_request + header_len,
+                       request_ptr->body, request_ptr->body_len);
+            }
+            proxy_request[total_len] = '\0';
 
             int backend_fd = connect_to_backend("localhost", "8002");
             if (backend_fd == -1)
             {
                 LOG("ERROR", "Failed to connect to backend.");
-                char response_buffer[] = "<h1>502 Bad Gateway</h1>";
-                return response_builder(502, "Bad Gateway", response_buffer,
-                                        sizeof(response_buffer), "text/html");
+                free(proxy_request);
+                return response_builder(502, "Bad Gateway",
+                                        "Backend unavailable", 19, "text/plain");
             }
 
-            send(backend_fd, proxy_request, proxy_request_len, 0);
+            send(backend_fd, proxy_request, total_len, 0);
+            free(proxy_request);
 
-            // Receive response from backend
-            char proxy_response[INITIAL_BUFFER_SIZE];
-            int proxy_response_len = recv(backend_fd, proxy_response, sizeof(proxy_response), 0);
-
-            if (proxy_response_len < 0)
+            /* SEC-02: Dynamic read loop with size cap for response */
+            size_t resp_cap = INITIAL_BUFFER_SIZE;
+            size_t resp_len = 0;
+            char *proxy_response = malloc(resp_cap);
+            if (!proxy_response)
             {
-                LOG("ERROR", "Failed to read from backend.");
-                char response_buffer[] = "<h1>502 Bad Gateway</h1>";
-                return response_builder(502, "Bad Gateway", response_buffer,
-                                        sizeof(response_buffer), "text/html");
+                close(backend_fd);
+                return response_builder(500, "Internal Server Error",
+                                        "Out of memory", 13, "text/plain");
             }
 
-            proxy_response[proxy_response_len] = '\0';
+            while (1)
+            {
+                ssize_t n = recv(backend_fd, proxy_response + resp_len,
+                                 resp_cap - resp_len, 0);
+                if (n <= 0) break;
+                resp_len += (size_t)n;
+                if (resp_len > MAX_BODY_SIZE)
+                {
+                    free(proxy_response);
+                    close(backend_fd);
+                    return response_builder(502, "Bad Gateway",
+                                            "Backend response too large", 26, "text/plain");
+                }
+                if (resp_len >= resp_cap)
+                {
+                    resp_cap *= 2;
+                    if (resp_cap > MAX_BODY_SIZE + INITIAL_BUFFER_SIZE)
+                        resp_cap = MAX_BODY_SIZE + INITIAL_BUFFER_SIZE;
+                    char *tmp = realloc(proxy_response, resp_cap);
+                    if (!tmp)
+                    {
+                        free(proxy_response);
+                        close(backend_fd);
+                        return response_builder(500, "Internal Server Error",
+                                                "Out of memory", 13, "text/plain");
+                    }
+                    proxy_response = tmp;
+                }
+            }
+
+            proxy_response[resp_len] = '\0';
             close(backend_fd);
 
-            LOG("DEBUG", "Received %d bytes response from backend.", proxy_response_len);
+            LOG("DEBUG", "Received %zu bytes response from backend.", resp_len);
 
-            // TODO: parse response headers, here we directly return body
+            /* TODO: parse response headers, here we directly return body */
             char *body = strstr(proxy_response, "\r\n\r\n");
             if (!body)
                 body = proxy_response;
             else
                 body += 4;
 
+            size_t body_len = resp_len - (size_t)(body - proxy_response);
             HTTPResponse *response =
-                response_builder(200, "OK", body, proxy_request_len, "text/html");
+                response_builder(200, "OK", body, body_len, "text/html");
+            free(proxy_response);
             return response;
         }
         else
@@ -551,6 +666,12 @@ int free_connection(Connection *conn, int client_fd, int epoll_fd)
 
     conn->buffer_size = 0;
     conn->buffer_len  = 0;
+
+    if (conn->curr_request)
+    {
+        free_http_request(conn->curr_request);
+        conn->curr_request = NULL;
+    }
 
     return OK;
 }

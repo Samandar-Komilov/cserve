@@ -1,3 +1,19 @@
+---
+gsd_state_version: 1.0
+milestone: v1.0
+milestone_name: milestone
+status: completed
+stopped_at: Completed 01-03-PLAN.md (Phase 1 complete)
+last_updated: "2026-03-18T11:22:26.357Z"
+last_activity: 2026-03-18 -- Completed 01-03 (path traversal, proxy buffers, signal safety)
+progress:
+  total_phases: 9
+  completed_phases: 1
+  total_plans: 3
+  completed_plans: 3
+  percent: 100
+---
+
 # Project State
 
 ## Project Reference
@@ -9,12 +25,12 @@ See: .planning/PROJECT.md (updated 2026-03-17)
 
 ## Current Position
 
-Phase: 1 of 9 (Security and Safety)
-Plan: 0 of ? in current phase
-Status: Ready to plan
-Last activity: 2026-03-17 -- Roadmap created
+Phase: 1 of 9 (Security and Safety) -- COMPLETE
+Plan: 3 of 3 in current phase
+Status: Phase Complete
+Last activity: 2026-03-18 -- Completed 01-03 (path traversal, proxy buffers, signal safety)
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [██████████] 100% (Phase 1 complete)
 
 ## Performance Metrics
 
@@ -34,6 +50,9 @@ Progress: [░░░░░░░░░░] 0%
 - Trend: -
 
 *Updated after each plan completion*
+| Phase 01 P03 | 4min | 3 tasks | 7 files |
+| Phase 01 P02 | 2min | 2 tasks | 2 files |
+| Phase 01 P01 | 2min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -45,6 +64,11 @@ Recent decisions affecting current work:
 - Fix-first strategy: security vulnerabilities patched before any feature work
 - Zero external dependencies relaxed for TLS only (OpenSSL 3.x)
 - Sequential phase execution for solo developer workflow
+- [Phase 01]: Used strndup for all buffer-extracted strings instead of raw pointer storage
+- [Phase 01]: SEC-06 strtoull deferred to Phase 3: no Content-Length atoi in server.c
+- [Phase 01]: free_connection owns curr_request cleanup; caller owns close(fd)
+- [Phase 01]: Single percent-decode pass before realpath for path traversal prevention
+- [Phase 01]: shutdown_flag in main.c with extern in server.h; SIGSEGV not caught
 
 ### Pending Todos
 
@@ -57,6 +81,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-17
-Stopped at: Roadmap created, ready to plan Phase 1
+Last session: 2026-03-18T11:16:51Z
+Stopped at: Completed 01-03-PLAN.md (Phase 1 complete)
 Resume file: None

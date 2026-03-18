@@ -9,12 +9,12 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Security & Safety
 
-- [ ] **SEC-01**: Fix path traversal vulnerability — URL-decode first, realpath() both paths, verify resolved path starts with resolved root
-- [ ] **SEC-02**: Fix buffer overflows in proxy code — heap-allocate all request data with explicit size limits, no stack buffers for request data
-- [ ] **SEC-03**: Fix use-after-free in parser — copy all parsed fields with strndup(), no raw pointers into read buffer
-- [ ] **SEC-04**: Fix signal handler safety — handler sets only volatile sig_atomic_t flag (or use signalfd()), all cleanup in main loop
-- [ ] **SEC-05**: Fix fd sentinel value — use -1 (not 0) after close(), remove from epoll before freeing
-- [ ] **SEC-06**: Fix integer overflow in Content-Length parsing — replace atoi with strtoull, body_length int to size_t
+- [x] **SEC-01**: Fix path traversal vulnerability — URL-decode first, realpath() both paths, verify resolved path starts with resolved root
+- [x] **SEC-02**: Fix buffer overflows in proxy code — heap-allocate all request data with explicit size limits, no stack buffers for request data
+- [x] **SEC-03**: Fix use-after-free in parser — copy all parsed fields with strndup(), no raw pointers into read buffer
+- [x] **SEC-04**: Fix signal handler safety — handler sets only volatile sig_atomic_t flag (or use signalfd()), all cleanup in main loop
+- [x] **SEC-05**: Fix fd sentinel value — use -1 (not 0) after close(), remove from epoll before freeing
+- [x] **SEC-06**: Fix integer overflow in Content-Length parsing — replace atoi with strtoull, body_length int to size_t
 
 ### Architecture
 
@@ -149,12 +149,12 @@ Deferred to future release. Tracked but not in current roadmap.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SEC-01 | Phase 1 | Pending |
-| SEC-02 | Phase 1 | Pending |
-| SEC-03 | Phase 1 | Pending |
-| SEC-04 | Phase 1 | Pending |
-| SEC-05 | Phase 1 | Pending |
-| SEC-06 | Phase 1 | Pending |
+| SEC-01 | Phase 1 | Complete |
+| SEC-02 | Phase 1 | Complete |
+| SEC-03 | Phase 1 | Complete |
+| SEC-04 | Phase 1 | Complete |
+| SEC-05 | Phase 1 | Complete |
+| SEC-06 | Phase 1 | Complete |
 | ARCH-01 | Phase 2 | Pending |
 | ARCH-02 | Phase 2 | Pending |
 | ARCH-03 | Phase 2 | Pending |

@@ -20,8 +20,8 @@ typedef struct
     char *body;
     char *content_type;
     int header_count;
-    int body_length;
-    int content_length;
+    size_t body_length;
+    size_t content_length;
 } HTTPResponse;
 
 HTTPResponse *httpresponse_constructor();

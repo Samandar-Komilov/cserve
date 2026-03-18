@@ -20,24 +20,27 @@ int parse_request_line(HTTPRequest *req_t, const char *reqstr, size_t len)
     const char *ptr = reqstr;
     const char *end = reqstr + len;
 
-    // Parse method (put pointer to buffer)
+    // Parse method (heap copy via strndup)
     const char *space = memchr(ptr, ' ', end - ptr);
     if (!space) return -1;
-    req_t->request_line.method     = (char *)ptr;
+    req_t->request_line.method = strndup(ptr, space - ptr);
+    if (!req_t->request_line.method) return INVALID_REQUEST_LINE;
     req_t->request_line.method_len = space - ptr;
     ptr                            = space + 1;
 
-    // Parse URI (put pointer to buffer)
+    // Parse URI (heap copy via strndup)
     space = memchr(ptr, ' ', end - ptr);
     if (!space) return -1;
-    req_t->request_line.uri     = (char *)ptr;
+    req_t->request_line.uri = strndup(ptr, space - ptr);
+    if (!req_t->request_line.uri) return INVALID_REQUEST_LINE;
     req_t->request_line.uri_len = space - ptr;
     ptr                         = space + 1;
 
-    // Parse protocol (put pointer to buffer)
+    // Parse protocol (heap copy via strndup)
     const char *crlf = memmem(ptr, end - ptr, "\r\n", 2);
     if (!crlf) return -1;
-    req_t->request_line.protocol     = (char *)ptr;
+    req_t->request_line.protocol = strndup(ptr, crlf - ptr);
+    if (!req_t->request_line.protocol) return INVALID_REQUEST_LINE;
     req_t->request_line.protocol_len = crlf - ptr;
     ptr                              = crlf + 2;
 
@@ -59,7 +62,8 @@ int parse_header(HTTPHeader *header, const char *line, size_t len)
     // Find colon
     const char *colon = memchr(ptr, ':', end - ptr);
     if (!colon) return -1;
-    header->name     = (char *)ptr;
+    header->name = strndup(ptr, colon - ptr);
+    if (!header->name) return INVALID_HEADERS;
     header->name_len = colon - ptr;
     ptr              = colon + 1;
 
@@ -70,7 +74,8 @@ int parse_header(HTTPHeader *header, const char *line, size_t len)
     // Find end of line
     const char *crlf = memmem(ptr, end - ptr, "\r\n", 2);
     if (!crlf) return -1;
-    header->value     = (char *)ptr;
+    header->value = strndup(ptr, crlf - ptr);
+    if (!header->value) return INVALID_HEADERS;
     header->value_len = crlf - ptr;
     ptr               = crlf + 2;
 
