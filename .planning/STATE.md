@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 01-01-PLAN.md
-last_updated: "2026-03-18T11:11:10.732Z"
-last_activity: 2026-03-18 -- Completed 01-02 (fix use-after-free in HTTP parser)
+stopped_at: Completed 01-03-PLAN.md
+last_updated: "2026-03-18T11:16:51Z"
+last_activity: 2026-03-18 -- Completed 01-03 (path traversal, proxy buffers, signal safety)
 progress:
   total_phases: 9
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 3
-  completed_plans: 2
-  percent: 33
+  completed_plans: 3
+  percent: 100
 ---
 
 # Project State
@@ -25,12 +25,12 @@ See: .planning/PROJECT.md (updated 2026-03-17)
 
 ## Current Position
 
-Phase: 1 of 9 (Security and Safety)
-Plan: 2 of 3 in current phase
-Status: Executing
-Last activity: 2026-03-18 -- Completed 01-02 (fix use-after-free in HTTP parser)
+Phase: 1 of 9 (Security and Safety) -- COMPLETE
+Plan: 3 of 3 in current phase
+Status: Phase Complete
+Last activity: 2026-03-18 -- Completed 01-03 (path traversal, proxy buffers, signal safety)
 
-Progress: [███░░░░░░░] 33%
+Progress: [██████████] 100% (Phase 1 complete)
 
 ## Performance Metrics
 
@@ -50,6 +50,7 @@ Progress: [███░░░░░░░] 33%
 - Trend: -
 
 *Updated after each plan completion*
+| Phase 01 P03 | 4min | 3 tasks | 7 files |
 | Phase 01 P02 | 2min | 2 tasks | 2 files |
 | Phase 01 P01 | 2min | 2 tasks | 4 files |
 
@@ -66,6 +67,8 @@ Recent decisions affecting current work:
 - [Phase 01]: Used strndup for all buffer-extracted strings instead of raw pointer storage
 - [Phase 01]: SEC-06 strtoull deferred to Phase 3: no Content-Length atoi in server.c
 - [Phase 01]: free_connection owns curr_request cleanup; caller owns close(fd)
+- [Phase 01]: Single percent-decode pass before realpath for path traversal prevention
+- [Phase 01]: shutdown_flag in main.c with extern in server.h; SIGSEGV not caught
 
 ### Pending Todos
 
@@ -78,6 +81,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-18T11:11:10.729Z
-Stopped at: Completed 01-01-PLAN.md
+Last session: 2026-03-18T11:16:51Z
+Stopped at: Completed 01-03-PLAN.md (Phase 1 complete)
 Resume file: None

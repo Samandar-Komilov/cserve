@@ -12,7 +12,7 @@ cserve goes from a working-but-vulnerable HTTP server to a production-ready, RFC
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Security and Safety** - Eliminate all known vulnerabilities before building on the codebase
+- [x] **Phase 1: Security and Safety** - Eliminate all known vulnerabilities before building on the codebase (completed 2026-03-18)
 - [ ] **Phase 2: Architecture and Testing** - Decompose monolith into testable modules with CI safety nets
 - [ ] **Phase 3: HTTP Parsing and Connection Management** - RFC 7230 compliant message framing, chunked encoding, and persistent connections
 - [ ] **Phase 4: HTTP Semantics** - RFC 7231 method handling, status codes, and required response headers
@@ -177,7 +177,7 @@ Note: Phase 7 (Reverse Proxy) depends on Phase 4 (not Phase 6), so Phases 5-6 an
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Security and Safety | 0/3 | Planning complete | - |
+| 1. Security and Safety | 3/3 | Complete   | 2026-03-18 |
 | 2. Architecture and Testing | 0/? | Not started | - |
 | 3. HTTP Parsing and Connection Management | 0/? | Not started | - |
 | 4. HTTP Semantics | 0/? | Not started | - |
