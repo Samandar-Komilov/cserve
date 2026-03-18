@@ -38,6 +38,9 @@ int launch(HTTPServer *self)
         close(self->epoll_fd);
         return -1;
     }
+    for (size_t j = 0; j < MAX_CONNECTIONS; j++) {
+        self->connections[j].socket = -1;
+    }
     self->active_count = 0;
 
     // Add server socket to epoll
@@ -83,7 +86,7 @@ int launch(HTTPServer *self)
                 Connection *conn = NULL;
                 for (size_t j = 0; j < MAX_CONNECTIONS; j++)
                 {
-                    if (self->connections[j].socket == 0)
+                    if (self->connections[j].socket == -1)
                     {
                         conn = &self->connections[j];
                         break;
@@ -114,7 +117,7 @@ int launch(HTTPServer *self)
                     LOG("ERROR", "Failed to set socket nonblocking.");
                     free(conn->buffer);
                     close(client_fd);
-                    conn->socket = 0;
+                    conn->socket = -1;
                     self->active_count--;
                     continue;
                 }
@@ -127,7 +130,7 @@ int launch(HTTPServer *self)
                     LOG("ERROR", "Failed to add client socket to epoll event loop.");
                     free(conn->buffer);
                     close(client_fd);
-                    conn->socket = 0;
+                    conn->socket = -1;
                     self->active_count--;
                     continue;
                 }
@@ -151,7 +154,6 @@ int launch(HTTPServer *self)
                            conn->buffer_size - conn->buffer_len);
                     printf("Buffer: %s\n", conn->buffer);
 
-                    conn->buffer[conn->buffer_len + bytes_read] = '\0';
                     if (bytes_read < 0)
                     {
                         if (errno == EAGAIN || errno == EWOULDBLOCK)
@@ -198,7 +200,17 @@ int launch(HTTPServer *self)
                     {
                         // Successfully read some data
                         conn->buffer_len += bytes_read;
+                        conn->buffer[conn->buffer_len] = '\0';
                         LOG("DEBUG", "Read %d bytes from socket FD %d", bytes_read, client_fd);
+
+                        // Enforce header size limit
+                        if (conn->buffer_len > MAX_HEADER_SIZE)
+                        {
+                            LOG("ERROR", "Request headers exceed %d bytes, rejecting",
+                                MAX_HEADER_SIZE);
+                            conn->state = CONN_CLOSING;
+                            break;
+                        }
 
                         // Check if we need to grow buffer
                         if (conn->buffer_len >= conn->buffer_size)
@@ -327,10 +339,9 @@ int launch(HTTPServer *self)
                 if (conn->state == CONN_CLOSING || conn->state == CONN_ERROR)
                 {
                     LOG("DEBUG", "Connection is closing for client FD %d", client_fd);
-                    if (conn->curr_request != NULL) free_http_request(conn->curr_request);
                     epoll_ctl(self->epoll_fd, EPOLL_CTL_DEL, client_fd, NULL);
-                    close(client_fd);
                     free_connection(conn, client_fd, self->epoll_fd);
+                    close(client_fd);
                     self->active_count--;
                 }
             }
@@ -551,6 +562,12 @@ int free_connection(Connection *conn, int client_fd, int epoll_fd)
 
     conn->buffer_size = 0;
     conn->buffer_len  = 0;
+
+    if (conn->curr_request)
+    {
+        free_http_request(conn->curr_request);
+        conn->curr_request = NULL;
+    }
 
     return OK;
 }
