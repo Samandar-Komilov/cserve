@@ -111,14 +111,12 @@ HTTPResponse *response_builder(int status_code, const char *phrase, const char *
     HTTPResponse *response = httpresponse_constructor();
 
     // Ownership moves: caller frees memory
-    response->body = (char *)malloc(body_length);
+    response->body = calloc(1, body_length);
     if (!response->body)
     {
         httpresponse_free(response);
         return NULL;
     }
-
-    memset(response->body, 0, body_length);
 
     response->status_code   = status_code;
     response->version       = strdup("HTTP/1.1");

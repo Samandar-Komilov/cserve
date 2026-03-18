@@ -40,6 +40,8 @@
 #define MAX_HEADERS 50
 #define MAX_BACKENDS 16
 #define INITIAL_RESPONSE_SIZE 4096
+#define MAX_HEADER_SIZE  8192       /* 8 KB - reject with 431 */
+#define MAX_BODY_SIZE    1048576    /* 1 MB - reject with 413 */
 
 #define DEFAULT_CONFIG_PATH "/home/voidp/Projects/samandar/1lang1server/cserver"
 #define BASE_DIR "./"
