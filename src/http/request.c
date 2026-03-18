@@ -32,6 +32,24 @@ HTTPRequest *create_http_request(void)
 
 void free_http_request(HTTPRequest *req)
 {
-    free(req->headers);
+    if (!req) return;
+
+    // Free request line fields (strndup'd copies)
+    free(req->request_line.method);
+    free(req->request_line.uri);
+    free(req->request_line.protocol);
+
+    // Free each header's name and value (strndup'd copies)
+    if (req->headers) {
+        for (int i = 0; i < req->header_count; i++) {
+            free(req->headers[i].name);
+            free(req->headers[i].value);
+        }
+        free(req->headers);
+    }
+
+    // Free body if present
+    free(req->body);
+
     free(req);
 }
